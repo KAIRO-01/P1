@@ -2,6 +2,7 @@ package app.shilex.android.tools
 
 import android.content.Intent
 import android.net.Uri
+import android.location.LocationManager
 import org.json.JSONObject
 
 /**
@@ -24,6 +25,10 @@ object NavigationTools {
         override suspend fun run(args: JSONObject, host: ToolHost): JSONObject {
             val destination = args.text("destination").take(250)
             if (destination.isBlank()) return Results.failed("missing_destination", "Ask where to navigate.")
+            val location = host.context.getSystemService(LocationManager::class.java)
+            if (!location.isLocationEnabled) return Results.failed(
+                "location_disabled", "Device location is OFF. Open KAIRO Settings > Permissions, enable Location and try again."
+            )
             val mode = when (args.text("mode").lowercase()) {
                 "walking", "walk" -> "w"
                 "bicycling", "cycling", "bike_cycle" -> "b"
@@ -31,7 +36,9 @@ object NavigationTools {
                 else -> "d"
             }
             // google.navigation starts from current location; Google Maps owns GPS permission.
-            val uri = Uri.parse("google.navigation:q=" + Uri.encode(destination) + "&mode=" + mode)
+            val uri = if (mode == "r") Uri.parse(
+                "https://www.google.com/maps/dir/?api=1&destination=" + Uri.encode(destination) + "&travelmode=transit"
+            ) else Uri.parse("google.navigation:q=" + Uri.encode(destination) + "&mode=" + mode)
             val intent = Intent(Intent.ACTION_VIEW, uri).apply {
                 setPackage("com.google.android.apps.maps")
                 addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
