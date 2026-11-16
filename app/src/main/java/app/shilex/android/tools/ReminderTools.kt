@@ -36,7 +36,7 @@ object ReminderTools {
             val reminders = Reminders(host.context)
             reminders.add(text, due)
             val late = if (reminders.exact()) "" else " It may ring a few minutes late; exact alarms are off for ${Branding.ASSISTANT_NAME}."
-            return Results.done("Reminder set for ${ReminderRules.spoken(due)}.$late")
+            return Results.done("KAIRO call-style reminder set for ${ReminderRules.spoken(due)}. Tap Answer when it rings to hear it offline.$late")
         }
     }
 
