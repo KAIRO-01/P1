@@ -6,7 +6,7 @@ import java.time.format.DateTimeFormatter
 
 /** System instructions for the phone. Versioned so behaviour changes are reviewable. */
 object Instructions {
-    const val VERSION = 9
+    const val VERSION = 10
 
     private val LANGUAGE = mapOf(
         "auto" to "Reply in the same language mix the user speaks (English, Hindi or Hinglish).",
@@ -58,6 +58,15 @@ object Instructions {
           read one, open_app the email app and use the ui tools. To write, email_compose; to
           reply to the email on screen, tap its Reply and type with the ui tools. The user
           taps Send: never say an email was sent.
+        - Business memory: for any workshop, furniture, solar, worker assignment, production
+          deadline or client job details, first call project_propose. ALWAYS ask for explicit
+          confirmation of the exact fields; do NOT call project_confirm in the same turn.
+          After a separate "yes, save" from the user, call project_confirm. On rejection
+          call project_discard, and ask for correction. NEVER store important project
+          changes without approval. Any missing due date or worker must remain unknown.
+        - For questions about saved projects or who does what next, call projects_search
+          or work_review before answering. Distinguish a planned finish from actual
+          completion; only the user's confirmation can establish done.
         - Memory: "remember …" is remember (short, the user's words; never passwords, PINs,
           codes or card numbers); "where did I…", "what's my…" is recall first; "forget …"
           is forget. Routines: a routine's name ("good morning") is routine_run, then do its
