@@ -3,12 +3,16 @@ on:
   push:
     branches: [main]
   workflow_dispatch:
+# Keep only the newest main-branch APK build.
+concurrency:
+  group: p1-kairo-test-apk
+  cancel-in-progress: true
 jobs:
   build:
     runs-on: ubuntu-latest
     timeout-minutes: 55
     permissions:
-      contents: read
+      contents: write
     steps:
       - uses: actions/checkout@v4
       - uses: actions/setup-java@v4
@@ -44,3 +48,19 @@ jobs:
           path: app/build/outputs/apk/debug/*.apk
           if-no-files-found: error
           retention-days: 30
+      - name: Publish direct-download testing APK (optional)
+        continue-on-error: true
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          cp app/build/outputs/apk/debug/app-debug.apk KAIRO-P1-testing.apk
+          if gh release view p1-kairo-testing >/dev/null 2>&1; then
+            gh release upload p1-kairo-testing KAIRO-P1-testing.apk --clobber
+          else
+            gh release create p1-kairo-testing KAIRO-P1-testing.apk \
+              --title "KAIRO P1 testing APK (not production)" \
+              --notes "Installable debug build for testing. The custom ONNX model and reliable speaker authentication are not yet included. Unsigned APK updates may need the older test version uninstalled first." \
+              --prerelease
+          fi
