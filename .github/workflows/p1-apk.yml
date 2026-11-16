@@ -61,6 +61,6 @@ jobs:
           else
             gh release create p1-kairo-testing KAIRO-P1-testing.apk \
               --title "KAIRO P1 testing APK (not production)" \
-              --notes "Installable debug build for testing. The custom ONNX model and reliable speaker authentication are not yet included. Unsigned APK updates may need the older test version uninstalled first." \
+              --notes "Installable debug build for testing. The custom ONNX model and reliable speaker authentication are not yet included. CI debug builds may use different signing keys; if Android refuses the update, uninstall the previous P1 test app and install again. This clears its saved app settings." \
               --prerelease
           fi
