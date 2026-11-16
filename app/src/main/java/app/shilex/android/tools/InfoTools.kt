@@ -87,7 +87,7 @@ object InfoTools {
                         val pages = JSONObject(response.body?.string().orEmpty())
                             .optJSONObject("query")?.optJSONObject("pages")
                         val id = pages?.keys()?.asSequence()?.firstOrNull()
-                        val page = id?.let { pages.optJSONObject(it) }
+                        val page = id?.let { pages?.optJSONObject(it) }
                         val summary = page?.optString("extract").orEmpty().trim()
                             .replace(Regex("\\s+"), " ")
                             .take(1_600)
