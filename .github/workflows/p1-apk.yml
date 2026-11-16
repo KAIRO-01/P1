@@ -1,7 +1,7 @@
 name: P1 Android APK
 on:
-  push:
-    branches: [main]
+  # The normal P1 build-p1-apk workflow handles main pushes.
+  # Keep this secondary build manual to avoid duplicate free CI runs.
   workflow_dispatch:
 # Keep only the newest main-branch APK build.
 concurrency:
