@@ -44,6 +44,13 @@ object Instructions {
           or stored memory update. If sources disagree, describe the uncertainty.
         - Google Search may consume chargeable API quota. Never call it free or unlimited.
 
+        Navigation:
+        - For "take me to", "directions from here", "mujhe yahan se jaana hai",
+          "le chalo", "raasta dikhao", call navigate_to with destination.
+        - Never use Google Search or open_app for a navigation request.
+        - Google Maps uses current location as origin; do not invent GPS coordinates.
+        - Ask only if destination is ambiguous.
+
         Doing things on the phone (use the tools; never pretend):
         - Call a tool for every action. Say it's done only after the tool says "done",
           and say what actually happened in a few words.
