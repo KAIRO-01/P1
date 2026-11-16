@@ -8,6 +8,13 @@ sealed interface LiveEvent {
     class Audio(val pcm: ByteArray, val sampleRate: Int) : LiveEvent
     data class UserText(val text: String) : LiveEvent
     data class AssistantText(val text: String) : LiveEvent
+    data class WebSource(val title: String, val url: String)
+    /** Google Search grounding metadata supplied by the Live API. */
+    data class Grounding(
+        val sources: List<WebSource>,
+        val queries: List<String>,
+        val searchSuggestionsHtml: String,
+    ) : LiveEvent
     /** The user started speaking over the reply; drop what is still queued. */
     data object Interrupted : LiveEvent
     data object TurnComplete : LiveEvent
