@@ -43,6 +43,45 @@ class LiveProtocolTest {
     }
 
     @Test
+    fun googleSearchMustBeExplicitlyEnabled() {
+        val off = JSONObject(LiveProtocol.setupMessage(setup)).getJSONObject("setup")
+        assertFalse(off.has("tools"))
+        val on = JSONObject(LiveProtocol.setupMessage(setup.copy(googleSearch = true)))
+            .getJSONObject("setup").getJSONArray("tools")
+        assertEquals(1, on.length())
+        assertTrue(on.getJSONObject(0).has("googleSearch"))
+    }
+
+    @Test
+    fun searchAndPhoneToolCanRunTogether() {
+        val tool = JSONObject().put("name", "get_weather")
+        val config = setup.copy(tools = org.json.JSONArray().put(tool), googleSearch = true)
+        val enabled = JSONObject(LiveProtocol.setupMessage(config))
+            .getJSONObject("setup").getJSONArray("tools")
+        assertEquals(2, enabled.length())
+        assertTrue(enabled.getJSONObject(0).has("functionDeclarations"))
+        assertTrue(enabled.getJSONObject(1).has("googleSearch"))
+    }
+
+    @Test
+    fun parsesGroundingSourcesAndSearchSuggestions() {
+        val metadata = JSONObject()
+            .put("groundingChunks", org.json.JSONArray().put(JSONObject()
+                .put("web", JSONObject().put("uri", "https://example.com/teak")
+                    .put("title", "Teak listing"))))
+            .put("webSearchQueries", org.json.JSONArray().put("teak price"))
+            .put("searchEntryPoint", JSONObject().put("renderedContent", "<div>Search</div>"))
+        val events = LiveProtocol.parse(
+            JSONObject().put("serverContent", JSONObject().put("groundingMetadata", metadata)).toString()
+        )
+        assertEquals(1, events.size)
+        val info = events.first() as LiveEvent.Grounding
+        assertEquals("https://example.com/teak", info.sources.first().url)
+        assertEquals("teak price", info.queries.first())
+        assertTrue(info.searchSuggestionsHtml.contains("Search"))
+    }
+
+    @Test
     fun audioIsBase64Pcm16k() {
         val pcm = byteArrayOf(1, 2, 3, 4)
         val audio = JSONObject(LiveProtocol.audioMessage(pcm)).getJSONObject("realtimeInput").getJSONObject("audio")
