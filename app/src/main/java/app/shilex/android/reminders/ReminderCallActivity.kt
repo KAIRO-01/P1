@@ -67,6 +67,13 @@ class ReminderCallActivity : ComponentActivity() {
     private var unlocked by mutableStateOf(false)
     private var sessionStartedHere = false
     private var ringtone: Ringtone? = null
+    private val missedTimeout = Runnable {
+        if (!answered && !isFinishing && !isDestroyed) {
+            stopRinging()
+            // No explicit Decline: keep the retry alarm and show another call later.
+            finish()
+        }
+    }
     private val startRing = Runnable {
         if (answered || isFinishing || isDestroyed) return@Runnable
         runCatching {
@@ -108,7 +115,10 @@ class ReminderCallActivity : ComponentActivity() {
             }
         }
         if (intent.getBooleanExtra(EXTRA_AUTO_ANSWER, false)) answer()
-        else main.postDelayed(startRing, 1_200L)
+        else {
+            main.postDelayed(startRing, 1_200L)
+            main.postDelayed(missedTimeout, 30_000L)
+        }
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -158,6 +168,8 @@ class ReminderCallActivity : ComponentActivity() {
         }
         unlocked = true
         answered = true
+        main.removeCallbacks(missedTimeout)
+        Reminders(this).stopCalling(reminderId)
         stopRinging()
         cancelNotification()
 
@@ -255,6 +267,7 @@ class ReminderCallActivity : ComponentActivity() {
     }
 
     private fun dismiss() {
+        Reminders(this).stopCalling(reminderId)
         if (sessionStartedHere) VoiceSession.get(applicationContext).stop("reminder call ended")
         sessionStartedHere = false
         usingAi = false
@@ -277,6 +290,7 @@ class ReminderCallActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        main.removeCallbacks(missedTimeout)
         if (sessionStartedHere && !isChangingConfigurations) {
             VoiceSession.get(applicationContext).stop("reminder activity closed")
         }
@@ -344,7 +358,7 @@ private fun IncomingReminder(
                             contentPadding = androidx.compose.foundation.layout.PaddingValues(0.dp),
                         ) { Text("✕", color = Color.White, style = MaterialTheme.typography.headlineSmall) }
                         Spacer(Modifier.height(8.dp))
-                        Text("Dismiss", color = Color.White)
+                        Text("Decline", color = Color.White)
                     }
                     Column(horizontalAlignment = Alignment.CenterHorizontally) {
                         Button(
