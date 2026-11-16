@@ -1,6 +1,7 @@
 package app.shilex.android.tools
 
 import app.shilex.android.sheets.OrderSheet
+import app.shilex.android.sheets.SheetWatch
 import java.time.LocalDate
 import java.time.temporal.ChronoUnit
 import java.text.NumberFormat
@@ -20,13 +21,14 @@ object SheetTools {
             "Read the owner's connected Google Sheet of customer mandir orders, live when permitted. " +
                 "Use for order details, who is delivering in the next days, pending balance, overdue deliveries. " +
                 "Never invent missing cells or report offline CSV as current live data.",
-            Schema.string("action", "find, due, overdue, balance, or list", required = true,
-                choices = listOf("find", "due", "overdue", "balance", "list")),
+            Schema.string("action", "find, due, overdue, balance, list, or changes", required = true,
+                choices = listOf("find", "due", "overdue", "balance", "list", "changes")),
             Schema.string("customer", "Customer name for find; part of name is fine."),
             Schema.integer("days", "For due: upcoming number of days (default 4, max 90)."),
         )
 
         override suspend fun run(args: JSONObject, host: ToolHost): JSONObject {
+            if (args.text("action") == "changes") return Results.done(SheetWatch.lastUpdate(host.context))
             val snapshot = try {
                 withContext(Dispatchers.IO) { OrderSheet.load(host.context, host.http) }
             } catch (e: Exception) {

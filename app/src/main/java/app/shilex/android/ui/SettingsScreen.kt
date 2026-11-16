@@ -45,6 +45,7 @@ import app.shilex.android.orb.FloatingOrb
 import app.shilex.android.reminders.Reminders
 import app.shilex.android.wake.WakeWordModel
 import app.shilex.android.sheets.OrderSheet
+import app.shilex.android.sheets.SheetWatch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
@@ -291,6 +292,7 @@ fun SettingsScreen(assistant: AssistantViewModel) {
                 else "Saved source ready for testing."
             ) }
             val sheetScope = rememberCoroutineScope()
+            var watchChanges by remember { mutableStateOf(sheetSettings.watchSheetChanges) }
             val csvPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
                 if (uri != null) sheetScope.launch {
                     sheetStatus = "Importing your private CSV..."
@@ -318,6 +320,22 @@ fun SettingsScreen(assistant: AssistantViewModel) {
                 singleLine = true,
                 modifier = Modifier.fillMaxWidth(),
             )
+            SwitchRow(
+                "Notify me when Google Sheet orders change",
+                "Checks a readable LIVE Sheet about every 30 minutes. Android may delay checks. " +
+                    "Works only with a live accessible link; an imported CSV cannot update itself. " +
+                    "Allow Android notifications to receive alerts.",
+                watchChanges,
+                enabled = sheetLink.isNotBlank(),
+            ) { enable ->
+                if (SheetWatch.configure(context, enable)) {
+                    watchChanges = enable
+                    sheetStatus = if (enable) "Change alerts scheduled; first successful check sets a baseline." else "Change alerts turned off."
+                } else {
+                    sheetStatus = "Android could not schedule Sheet monitoring."
+                }
+            }
+            InfoRow("Last background check", SheetWatch.lastUpdate(context))
             InfoRow("Order data", sheetStatus) {
                 TextButton(onClick = {
                     if (sheetLink.isBlank()) {

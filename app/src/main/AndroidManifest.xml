@@ -98,6 +98,10 @@
             </intent-filter>
         </service>
         <service
+            android:name=".sheets.SheetWatchService"
+            android:exported="false"
+            android:permission="android.permission.BIND_JOB_SERVICE" />
+        <service
             android:name=".assistant.VoiceService"
             android:exported="false"
             android:foregroundServiceType="microphone" />

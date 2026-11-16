@@ -22,6 +22,11 @@ class Settings(context: Context) {
         set(value) = prefs.edit().putBoolean("live_web_search", value).apply()
 
     /** Read-only URL. The Sheet is never made public by KAIRO. */
+    /** Optional background watch; checks roughly every 30 minutes, subject to Android scheduling. */
+    var watchSheetChanges: Boolean
+        get() = prefs.getBoolean("watch_sheet_changes", false)
+        set(value) = prefs.edit().putBoolean("watch_sheet_changes", value).apply()
+
     var orderSheetUrl: String
         get() = prefs.getString("order_sheet_url", "") ?: ""
         set(value) = prefs.edit().putString("order_sheet_url", value.trim()).apply()
