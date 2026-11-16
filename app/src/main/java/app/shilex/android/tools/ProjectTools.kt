@@ -3,6 +3,7 @@ package app.shilex.android.tools
 import app.shilex.android.memory.MemoryRules
 import app.shilex.android.memory.ProjectApproval
 import app.shilex.android.memory.ProjectMemory
+import app.shilex.android.memory.WorkMemory
 import org.json.JSONObject
 import java.time.LocalDate
 
@@ -82,6 +83,6 @@ object ProjectTools {
         override fun declaration() = Schema.function(name,
             "Report approved local project memory for daily work review. Check deadlines, people and assignments; never claim an unverified project finished.")
         override suspend fun run(args: JSONObject, host: ToolHost): JSONObject =
-            Results.done(ProjectMemory(host.context).review())
+            Results.done(WorkMemory(host.context).summary() + "\nOlder projects: " + ProjectMemory(host.context).review())
     }
 }
