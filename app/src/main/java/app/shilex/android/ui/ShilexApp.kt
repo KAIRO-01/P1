@@ -55,7 +55,9 @@ fun ShilexApp(assistant: AssistantViewModel) {
 
     ShilexTheme {
         Surface(color = MaterialTheme.colorScheme.background, contentColor = MaterialTheme.colorScheme.onBackground) {
-            Content(assistant, state, localPhase, level, task, activity, wakeWord, onboarded, { onboarded = true }, tab) { tab = it }
+            Content(assistant, state, localPhase,
+                if (localPhase == LocalPhase.Idle) level else localLevel,
+                task, activity, wakeWord, onboarded, { onboarded = true }, tab) { tab = it }
         }
     }
 }
