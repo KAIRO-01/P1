@@ -50,15 +50,11 @@ object LiveProtocol {
             )
             .put("inputAudioTranscription", inputTranscription)
             .apply {
-                // Gemini answers ordinary knowledge questions itself. When the answer needs
-                // fresh facts, it can ground them with Search INSIDE the Live conversation;
-                // do not send the user to a browser.
-                val liveTools = JSONArray()
+                // Free-only configuration: no Google Search grounding / billable extras.
+                // Keep Gemini function declarations for the phone's local and free tools.
                 if (setup.tools.length() > 0) {
-                    liveTools.put(JSONObject().put("functionDeclarations", setup.tools))
+                    put("tools", JSONArray().put(JSONObject().put("functionDeclarations", setup.tools)))
                 }
-                liveTools.put(JSONObject().put("googleSearch", JSONObject()))
-                put("tools", liveTools)
             }
             .put("outputAudioTranscription", JSONObject())
             .put("sessionResumption", resumption)
