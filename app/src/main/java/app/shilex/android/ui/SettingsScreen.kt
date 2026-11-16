@@ -2,6 +2,7 @@ package app.shilex.android.ui
 
 import android.Manifest
 import android.app.NotificationManager
+import android.app.Activity
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
@@ -45,6 +46,7 @@ import app.shilex.android.orb.FloatingOrb
 import app.shilex.android.reminders.Reminders
 import app.shilex.android.wake.WakeWordModel
 import app.shilex.android.sheets.OrderSheet
+import app.shilex.android.sheets.SheetsAuth
 import app.shilex.android.sheets.SheetWatch
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.launch
@@ -293,6 +295,16 @@ fun SettingsScreen(assistant: AssistantViewModel) {
             ) }
             val sheetScope = rememberCoroutineScope()
             var watchChanges by remember { mutableStateOf(sheetSettings.watchSheetChanges) }
+            var googleConnected by remember { mutableStateOf(SheetsAuth.authorized(context)) }
+            val googleConsent = rememberLauncherForActivityResult(
+                ActivityResultContracts.StartIntentSenderForResult(),
+            ) { response ->
+                if (response.resultCode == Activity.RESULT_OK) {
+                    val ok = runCatching { SheetsAuth.complete(context, response.data) }.getOrDefault(false)
+                    googleConnected = ok
+                    sheetStatus = if (ok) "Google Account connected read-only. Tap Test." else "Google did not grant Sheets access."
+                } else sheetStatus = "Google authorization cancelled."
+            }
             val csvPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
                 if (uri != null) sheetScope.launch {
                     sheetStatus = "Importing your private CSV..."
@@ -307,11 +319,30 @@ fun SettingsScreen(assistant: AssistantViewModel) {
                 }
             }
             Text(
-                "Paste a Google Sheet link below. KAIRO can read live data only if Google permits link access. " +
-                    "For PRIVATE customer data, do NOT make the Sheet public: export a CSV and import it here. " +
-                    "Google Account OAuth for live private Sheets requires separate authorization.",
+                "Paste a Google Sheet link. For private Sheets, tap Connect Google Account to authorize READ-ONLY access. " +
+                    "Do not make customer data public. Google Sheets API and Android OAuth client configuration may be required.",
                 style = MaterialTheme.typography.bodySmall,
             )
+            InfoRow("Google Account", if (googleConnected) "Google Sheets read-only access granted." else "Not connected for private Sheets.") {
+                TextButton(onClick = {
+                    sheetStatus = "Opening Google authorization..."
+                    SheetsAuth.connect(context,
+                        resolve = { googleConsent.launch(it) },
+                        connected = { googleConnected = true; sheetStatus = "Google Account connected. Tap Test." },
+                        failed = { sheetStatus = it },
+                    )
+                }) { Text(if (googleConnected) "Reconnect" else "Connect") }
+            }
+            if (googleConnected) {
+                InfoRow("Disconnect Google", "Revoke KAIRO's Sheets permission, without deleting the spreadsheet.") {
+                    TextButton(onClick = {
+                        SheetsAuth.disconnect(context) { success ->
+                            googleConnected = SheetsAuth.authorized(context)
+                            sheetStatus = if (success) "Google permission revoked." else "Could not revoke Google permission; try again."
+                        }
+                    }) { Text("Disconnect") }
+                }
+            }
             OutlinedTextField(
                 value = sheetLink,
                 onValueChange = { sheetLink = it },
@@ -323,7 +354,7 @@ fun SettingsScreen(assistant: AssistantViewModel) {
             SwitchRow(
                 "Notify me when Google Sheet orders change",
                 "Checks a readable LIVE Sheet about every 30 minutes. Android may delay checks. " +
-                    "Works only with a live accessible link; an imported CSV cannot update itself. " +
+                    "Works with a connected live Sheet; Google may request authorization again. An imported CSV cannot update itself. " +
                     "Allow Android notifications to receive alerts.",
                 watchChanges,
                 enabled = OrderSheet.parseLink(sheetLink) != null,

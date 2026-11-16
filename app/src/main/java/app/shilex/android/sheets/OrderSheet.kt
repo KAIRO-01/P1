@@ -61,6 +61,7 @@ object OrderSheet {
         var reason = ""
         if (link.isNotEmpty()) {
             val ref = parseLink(link) ?: throw IllegalArgumentException("Invalid Google Sheets URL.")
+            if (SheetsAuth.authorized(context)) return SheetsAuth.read(context, http, ref)
             try {
                 val url = "https://docs.google.com/spreadsheets/d/${ref.id}/export?format=csv&gid=${ref.gid}"
                 val request = Request.Builder().url(url).get().build()

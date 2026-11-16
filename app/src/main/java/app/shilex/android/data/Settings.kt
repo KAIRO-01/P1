@@ -27,6 +27,11 @@ class Settings(context: Context) {
         get() = prefs.getBoolean("watch_sheet_changes", false)
         set(value) = prefs.edit().putBoolean("watch_sheet_changes", value).apply()
 
+    /** Google read-only consent is recorded only after successful authorization. */
+    var sheetOAuthConnected: Boolean
+        get() = prefs.getBoolean("sheet_oauth_connected", false)
+        set(value) = prefs.edit().putBoolean("sheet_oauth_connected", value).apply()
+
     var orderSheetUrl: String
         get() = prefs.getString("order_sheet_url", "") ?: ""
         set(value) = prefs.edit().putString("order_sheet_url", value.trim()).apply()

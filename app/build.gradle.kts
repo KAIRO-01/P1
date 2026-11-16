@@ -76,6 +76,7 @@ dependencies {
     implementation(libs.androidx.compose.ui.tooling.preview)
     implementation(libs.androidx.compose.material3)
     implementation(libs.okhttp)
+    implementation("com.google.android.gms:play-services-auth:21.4.0")
     // On-device wake word (openWakeWord ONNX models), MIT licence.
     implementation(libs.onnxruntime.android)
     // Offline speech for local commands (Vosk, Apache 2.0); the model comes from fetchVoskModel.
