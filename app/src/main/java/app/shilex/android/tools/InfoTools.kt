@@ -110,8 +110,8 @@ object InfoTools {
 
         override fun declaration() = Schema.function(
             name,
-            "Opens Google search results in the browser for the user to read. Use for news, prices, " +
-                "scores and anything recent.",
+            "ONLY when the user explicitly asks to open a web search in the browser. " +
+                "Do not use for normal factual questions, news, prices or everyday explanations.",
             Schema.string("query", "The search words.", required = true),
         )
 
