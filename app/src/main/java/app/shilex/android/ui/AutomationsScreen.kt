@@ -193,6 +193,10 @@ private fun ReminderPreview() {
                 }
             }) { Text("Test reminder call") }
             OutlinedButton(onClick = {
+                CallRetryManager(context).stopAll()
+                note = "All pending missed-call retries stopped."
+            }) { Text("Stop all missed-call retries") }
+            OutlinedButton(onClick = {
                 // Some manufacturers hide the runtime permission prompt after a denial.
                 // This opens the actual app notification page, not notification-listener access.
                 val intent = Intent(AndroidSettings.ACTION_APP_NOTIFICATION_SETTINGS)
