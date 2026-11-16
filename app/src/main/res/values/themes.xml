@@ -1,6 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <resources>
-    <!-- Follows the phone's light / dark setting; Compose draws everything else. -->
+    <!-- Match KAIRO's always-black Compose theme, independent of phone appearance. -->
     <style name="Theme.Shilex" parent="android:Theme.DeviceDefault.DayNight">
         <item name="android:windowActionBar">false</item>
         <item name="android:windowNoTitle">true</item>
