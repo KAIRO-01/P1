@@ -10,7 +10,29 @@ import org.json.JSONObject
 
 /** "What did I miss?": recent notifications, sorted by [Triage] before the model sees them. */
 object NotifyTools {
-    fun all(): List<PhoneTool> = listOf(NotificationsCheck, WatchMessages, ReplyPrepare, ReplySend)
+    fun all(): List<PhoneTool> = listOf(NotificationsCheck, NotificationStatus, WatchMessages, ReplyPrepare, ReplySend)
+
+    /** Explains exactly what Android exposed, without inventing hidden Instagram messages. */
+    private object NotificationStatus : PhoneTool {
+        override val name = "notifications_status"
+        override fun declaration() = Schema.function(
+            name, "Diagnose missing Instagram/WhatsApp notifications. Check Android listener permission, connection, and how many Instagram alerts were actually received on this phone.",
+        )
+        override suspend fun run(args: JSONObject, host: ToolHost): JSONObject {
+            if (!NotificationWatch.allowed(host.context)) return noAccess()
+            val recent = NotificationWatch.since(System.currentTimeMillis() - 12L * 60 * 60 * 1000)
+            val instagram = recent.filter { it.packageName == "com.instagram.android" }
+            val connected = NotificationWatch.connected
+            return Results.done(
+                "Android notification access: allowed. Listener: " +
+                    (if (connected) "connected" else "NOT connected; toggle KAIRO notification access off/on in Android Settings") +
+                    ". Instagram notifications actually captured in the last 12 hours: " + instagram.size +
+                    ". All app alerts captured: " + recent.size + "." +
+                    (if (instagram.isEmpty()) " If Instagram showed an alert but KAIRO saw none, check Instagram push notifications, preview privacy settings and KAIRO listener connection. Android does not expose full Instagram chat history."
+                     else " KAIRO can read only text Instagram placed inside Android notifications, not hidden chat content.")
+            )
+        }
+    }
 
     /** Step 1 of a hands-free reply: nothing is sent; the result is the line to read back. */
     private object ReplyPrepare : PhoneTool {
@@ -99,7 +121,8 @@ object NotifyTools {
             val since = System.currentTimeMillis() - hours * HOUR_MS
             val items = Triage.sort(NotificationWatch.since(since), host.context.packageName)
             Diag.i("notifications: ${items.size} sorted, ${items.count { it.kind == Triage.Kind.Needs }} need the user")
-            return Results.done("Last $hours h:\n" + Triage.summary(items))
+            val health = if (NotificationWatch.connected) "" else "\nWarning: notification reader is disconnected. Toggle KAIRO notification access off and on in Android Settings."
+            return Results.done("Last $hours h:\n" + Triage.summary(items) + health)
         }
     }
 
