@@ -56,6 +56,9 @@ class VoskWakeListener(private val context: Context, private val onWake: () -> U
                     return
                 }
                 val chunk = ShortArray(SAMPLE_RATE / 10)
+                // Keep only the last ~3 seconds for the speaker check; no recording is stored.
+                val recent = ArrayDeque<ShortArray>()
+                val profile = VoiceProfile.load(context)
                 var consecutive = 0
                 try {
                     record.startRecording()
@@ -63,10 +66,19 @@ class VoskWakeListener(private val context: Context, private val onWake: () -> U
                     while (running) {
                         val size = record.read(chunk, 0, chunk.size)
                         if (size <= 0) break
+                        recent.addLast(chunk.copyOf(size))
+                        if (recent.size > 30) recent.removeFirst()
                         val finished = recognizer.acceptWaveForm(chunk, size)
                         val text = extract(if (finished) recognizer.result else recognizer.partialResult)
                         consecutive = if (MATCH.containsMatchIn(text)) consecutive + 1 else 0
                         if ((finished && consecutive > 0) || consecutive >= 2) {
+                            if (profile != null && !matchesEnrolledVoice(profile, recent)) {
+                                // Don't allow an unverified voice to trigger the assistant.
+                                Diag.i("wake: offline phrase rejected by voice profile")
+                                consecutive = 0
+                                recognizer.reset()
+                                continue
+                            }
                             running = false
                             Diag.i("wake: offline phrase matched")
                             main.post(onWake)
@@ -83,6 +95,18 @@ class VoskWakeListener(private val context: Context, private val onWake: () -> U
         } finally {
             running = false
         }
+    }
+
+    private fun matchesEnrolledVoice(profile: VoiceProfile, recent: ArrayDeque<ShortArray>): Boolean {
+        if (profile.templates.firstOrNull()?.size != SpeakerFingerprint.VECTOR_SIZE) return false
+        val audio = ShortArray(recent.sumOf { it.size })
+        var index = 0
+        recent.forEach { frame ->
+            frame.copyInto(audio, index)
+            index += frame.size
+        }
+        val features = SpeakerFingerprint.extract(audio) ?: return false
+        return profile.similarity(features) >= profile.threshold
     }
 
     private fun extract(json: String): String =
