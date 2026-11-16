@@ -62,6 +62,7 @@ class ReminderCallActivity : ComponentActivity() {
     private var status by mutableStateOf("Incoming reminder")
     private var tts: TextToSpeech? = null
     private var usingAi by mutableStateOf(false)
+    private var unlocked by mutableStateOf(false)
     private var sessionStartedHere = false
     private var ringtone: Ringtone? = null
     private val startRing = Runnable {
@@ -79,6 +80,7 @@ class ReminderCallActivity : ComponentActivity() {
         super.onCreate(savedInstanceState)
         setShowWhenLocked(true)
         setTurnScreenOn(true)
+        unlocked = !getSystemService(KeyguardManager::class.java).isKeyguardLocked
         acceptIntent(intent)
 
         if (reminderId == -1L || reminderText.isBlank()) {
@@ -95,7 +97,7 @@ class ReminderCallActivity : ComponentActivity() {
             } else status
             ShilexTheme {
                 IncomingReminder(
-                    text = reminderText,
+                    text = if (unlocked) reminderText else "Unlock to view reminder details",
                     answered = answered,
                     status = label,
                     onAnswer = ::answer,
@@ -111,6 +113,7 @@ class ReminderCallActivity : ComponentActivity() {
         super.onNewIntent(intent)
         setIntent(intent)
         acceptIntent(intent)
+        unlocked = !getSystemService(KeyguardManager::class.java).isKeyguardLocked
         if (intent.getBooleanExtra(EXTRA_AUTO_ANSWER, false)) answer()
         else main.postDelayed(startRing, 1_200L)
     }
@@ -133,6 +136,11 @@ class ReminderCallActivity : ComponentActivity() {
         reminderText = newText
     }
 
+    override fun onResume() {
+        super.onResume()
+        unlocked = !getSystemService(KeyguardManager::class.java).isKeyguardLocked
+    }
+
     private fun answer() {
         if (answered || reminderText.isBlank()) return
         // Do not read business details or open a live microphone on a locked phone.
@@ -140,12 +148,13 @@ class ReminderCallActivity : ComponentActivity() {
         if (lock.isKeyguardLocked) {
             status = "Unlock your phone to answer privately."
             lock.requestDismissKeyguard(this, object : KeyguardManager.KeyguardDismissCallback() {
-                override fun onDismissSucceeded() { runOnUiThread { answer() } }
+                override fun onDismissSucceeded() { runOnUiThread { unlocked = true; answer() } }
                 override fun onDismissCancelled() { status = "Unlock cancelled. Tap Answer to retry." }
                 override fun onDismissError() { status = "Unlock phone, then tap Answer." }
             })
             return
         }
+        unlocked = true
         answered = true
         stopRinging()
         cancelNotification()
@@ -153,8 +162,9 @@ class ReminderCallActivity : ComponentActivity() {
         val session = VoiceSession.get(applicationContext)
         val micAllowed = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
         if (session.state.value.hasKey && micAllowed) {
+            if (session.active) session.stop("switching to reminder call")
             usingAi = true
-            sessionStartedHere = !session.active
+            sessionStartedHere = true
             status = "Connecting AI voice..."
             val memory = ProjectMemory(applicationContext)
             val context = when {
