@@ -41,6 +41,7 @@ object Capabilities {
         Capability("open_web_search", "Search the web", Risk.Low),
         Capability("ui_read", "Read the screen", Risk.Medium),
         Capability("notifications_check", "Check notifications", Risk.Medium),
+        Capability("notifications_status", "Diagnose missed notifications", Risk.Low),
         Capability("watch_messages", "Watch messages", Risk.Low),
         Capability("reply_prepare", "Prepare a reply", Risk.Low),
         Capability("reply_send", "Send a reply", Risk.High),
