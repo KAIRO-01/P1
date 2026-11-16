@@ -145,6 +145,19 @@ object ProjectApproval {
     @Synchronized fun userSpoke(text: String) {
         if (pending != null && text.isNotBlank()) words = (words + " " + text).takeLast(350)
     }
+    /** Real user confirmation is applied directly, without relying on another AI tool call. */
+    @Synchronized fun onAnswer(context: Context, spoken: String): String? {
+        if (pending == null) return null
+        val text = spoken.lowercase().trim().trimEnd('.', '!', '?', '।').trim()
+        if (Regex("^(no|nahi|nahin|cancel|reject|wrong|galat|नहीं)(\\b|$)").containsMatchIn(text)) {
+            discard()
+            return "User rejected project update; nothing saved. Ask for correction."
+        }
+        val yes = Regex("^(yes|yeah|yep|haan|han|haa|ji|ok|okay|save|theek hai|thik hai|हाँ|हां|ठीक है)(\\b|$)")
+        if (!yes.containsMatchIn(text) || text.length > 65) return null
+        words = text
+        return confirm(context)
+    }
     @Synchronized fun discard() { pending = null; words = "" }
     @Synchronized fun confirm(context: Context): String {
         val candidate = pending ?: return "No project change is waiting for confirmation."
