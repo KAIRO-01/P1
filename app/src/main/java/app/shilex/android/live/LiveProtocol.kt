@@ -21,6 +21,7 @@ object LiveProtocol {
         val resumeHandle: String?,
         /** Function declarations (name, description, parameters) the model may call. */
         val tools: JSONArray = JSONArray(),
+        val googleSearch: Boolean = false,
     )
 
     fun setupMessage(setup: Setup): String {
@@ -50,11 +51,11 @@ object LiveProtocol {
             )
             .put("inputAudioTranscription", inputTranscription)
             .apply {
-                // Free-only configuration: no Google Search grounding / billable extras.
-                // Keep Gemini function declarations for the phone's local and free tools.
-                if (setup.tools.length() > 0) {
-                    put("tools", JSONArray().put(JSONObject().put("functionDeclarations", setup.tools)))
-                }
+                // Built-in Google Search is enabled only after an explicit app setting.
+                val enabled = JSONArray()
+                if (setup.tools.length() > 0) enabled.put(JSONObject().put("functionDeclarations", setup.tools))
+                if (setup.googleSearch) enabled.put(JSONObject().put("googleSearch", JSONObject()))
+                if (enabled.length() > 0) put("tools", enabled)
             }
             .put("outputAudioTranscription", JSONObject())
             .put("sessionResumption", resumption)
@@ -142,6 +143,27 @@ object LiveProtocol {
         }
         content.optJSONObject("outputTranscription")?.optString("text")
             ?.takeIf { it.isNotEmpty() }?.let { events += LiveEvent.AssistantText(it) }
+        content.optJSONObject("groundingMetadata")?.let { metadata ->
+            val sources = mutableListOf<LiveEvent.WebSource>()
+            val chunks = metadata.optJSONArray("groundingChunks")
+            for (i in 0 until (chunks?.length() ?: 0)) {
+                val web = chunks?.optJSONObject(i)?.optJSONObject("web") ?: continue
+                val url = web.optString("uri").trim()
+                if (url.startsWith("https://") && url.length <= 2048) {
+                    sources += LiveEvent.WebSource(web.optString("title").take(150), url)
+                }
+            }
+            val queries = mutableListOf<String>()
+            val array = metadata.optJSONArray("webSearchQueries")
+            for (i in 0 until (array?.length() ?: 0)) {
+                array?.optString(i)?.take(120)?.takeIf { it.isNotBlank() }?.let(queries::add)
+            }
+            val html = metadata.optJSONObject("searchEntryPoint")
+                ?.optString("renderedContent").orEmpty().take(30_000)
+            if (sources.isNotEmpty() || queries.isNotEmpty() || html.isNotEmpty()) {
+                events += LiveEvent.Grounding(sources.distinctBy { it.url }.take(6), queries.take(6), html)
+            }
+        }
         if (content.optBoolean("turnComplete")) events += LiveEvent.TurnComplete
         return events
     }
