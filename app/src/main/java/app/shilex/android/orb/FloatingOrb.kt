@@ -93,7 +93,14 @@ object FloatingOrb {
                             )
                         },
                 ) {
-                    Orb(state.phase, Modifier.fillMaxSize(), level)
+                    val displayPhase = when (localState) {
+                        LocalPhase.Listening -> Phase.Listening
+                        LocalPhase.Doing -> Phase.Connecting
+                        LocalPhase.Speaking -> Phase.Speaking
+                        LocalPhase.Idle -> state.phase
+                    }
+                    Orb(displayPhase, Modifier.fillMaxSize(),
+                        if (localState == LocalPhase.Idle) level else localLevel)
                 }
             }
         }
