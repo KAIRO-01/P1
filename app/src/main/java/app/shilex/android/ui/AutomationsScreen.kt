@@ -58,7 +58,7 @@ private val CLOUD = listOf(
     Command("Songs", "\"Play Kesariya on YouTube Music\""),
     Command("Your screen", "\"What's on my screen?\" · \"reply to this\" (needs phone control)"),
     Command("Questions", "Weather, facts, explanations, anything else"),
-    Command("Reminders", "\"Remind me to call the bank at 5\""),
+    Command("Free call-style reminders", "\"Remind me to call the bank at 5\". KAIRO rings like a call; tap Answer to hear the reminder offline."),
 )
 
 /** What can be done: on the phone, with the user's OK, or with Gemini. */
