@@ -1,0 +1,55 @@
+name: Build P1 KAIRO APK
+
+on:
+  push:
+    branches: [main]
+    paths:
+      - ".github/workflows/build-p1-apk.yml"
+      - "app/**"
+      - "build.gradle.kts"
+      - "gradle/**"
+      - "gradle.properties"
+      - "settings.gradle.kts"
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 50
+    steps:
+      - name: Checkout P1
+        uses: actions/checkout@v4
+      - name: Set up JDK 17
+        uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+      - name: Set up Android SDK
+        uses: android-actions/setup-android@v3
+      - name: Install native Android build tools
+        run: |
+          sdkmanager --install "platforms;android-35" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
+          yes | sdkmanager --licenses >/dev/null || true
+      - name: Build KAIRO APK
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon --stacktrace :app:assembleDebug
+      - name: Upload APK artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: P1-KAIRO-Android-APK
+          path: app/build/outputs/apk/debug/app-debug.apk
+          if-no-files-found: error
+          retention-days: 30
+      - name: Publish direct APK download (preview)
+        if: github.ref == 'refs/heads/main'
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          TAG="p1-preview-${GITHUB_RUN_NUMBER}"
+          gh release create "$TAG" "app/build/outputs/apk/debug/app-debug.apk#P1-KAIRO-preview.apk" \
+            --target "$GITHUB_SHA" --title "P1 KAIRO APK Preview #${GITHUB_RUN_NUMBER}" --prerelease \
+            --notes "Independent P1 KAIRO Android preview. Tap to talk with Gemini API key. Spoken Stop handling is added, but listening over speaker still needs device testing. The trained Hey Kairo wake-word ONNX model is NOT included yet. This build uses a fresh debug signature; uninstall an older P1 preview if updating fails."
