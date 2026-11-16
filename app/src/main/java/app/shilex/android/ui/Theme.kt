@@ -16,22 +16,22 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.ui.unit.sp
 
 private val Dark = darkColorScheme(
-    primary = Color(0xFF4CD3EE),
-    onPrimary = Color(0xFF00222B),
-    primaryContainer = Color(0xFF0D3440),
-    onPrimaryContainer = Color(0xFFB8EEFA),
-    secondary = Color(0xFF9DB0C8),
-    tertiary = Color(0xFFFFB454),
-    background = Color(0xFF0A0E15),
-    onBackground = Color(0xFFE7ECF3),
-    surface = Color(0xFF0A0E15),
-    onSurface = Color(0xFFE7ECF3),
-    surfaceVariant = Color(0xFF151C28),
-    onSurfaceVariant = Color(0xFF8E9AAE),
-    surfaceContainer = Color(0xFF111723),
-    outline = Color(0xFF2A3445),
-    outlineVariant = Color(0xFF1F2836),
-    error = Color(0xFFFF8A80),
+    primary = Color(0xFF568E9D),
+    onPrimary = Color(0xFF001519),
+    primaryContainer = Color(0xFF12242B),
+    onPrimaryContainer = Color(0xFFC4DFE6),
+    secondary = Color(0xFF98AEB8),
+    tertiary = Color(0xFFBDA181),
+    background = Color(0xFF000000),
+    onBackground = Color(0xFFE3E9EC),
+    surface = Color(0xFF000000),
+    onSurface = Color(0xFFE3E9EC),
+    surfaceVariant = Color(0xFF0A1115),
+    onSurfaceVariant = Color(0xFF93A3AB),
+    surfaceContainer = Color(0xFF05090B),
+    outline = Color(0xFF293A42),
+    outlineVariant = Color(0xFF17262D),
+    error = Color(0xFFDF8D86),
 )
 
 private val Light = lightColorScheme(
@@ -72,11 +72,11 @@ private val Corners = Shapes(
     large = RoundedCornerShape(24.dp),
 )
 
-/** Follows the phone's light or dark setting. */
+/** KAIRO's always-black, low-glare colour palette. */
 @Composable
 fun ShilexTheme(content: @Composable () -> Unit) {
     MaterialTheme(
-        colorScheme = if (isSystemInDarkTheme()) Dark else Light,
+        colorScheme = Dark,
         typography = Type,
         shapes = Corners,
         content = content,
