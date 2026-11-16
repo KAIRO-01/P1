@@ -306,6 +306,36 @@ fun SettingsScreen(assistant: AssistantViewModel) {
             }
         }
 
+        Section("Quick permission setup") {
+            InfoRow("Microphone", "Required for KAIRO voice commands. Android will ask you to allow it.") {
+                val microphone = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
+                TextButton(onClick = {
+                    if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
+                        microphone.launch(Manifest.permission.RECORD_AUDIO)
+                    else open(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                }) { Text("Review") }
+            }
+            InfoRow("Current location / GPS", "Google Maps uses your live location for navigation. Enable device location and grant Maps location permission.") {
+                TextButton(onClick = { open(Settings.ACTION_LOCATION_SOURCE_SETTINGS) }) { Text("Open location") }
+                TextButton(onClick = {
+                    context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:com.google.android.apps.maps")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                }) { Text("Maps permission") }
+            }
+            InfoRow("Notification access", "Allow KAIRO to read supported incoming notification previews.") {
+                TextButton(onClick = { open(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS) }) { Text("Allow") }
+            }
+            InfoRow("Accessibility / phone control", "Enable KAIRO's Accessibility service manually in Android Settings.") {
+                TextButton(onClick = { open(Settings.ACTION_ACCESSIBILITY_SETTINGS) }) { Text("Open") }
+            }
+            InfoRow("Truecaller", "Open Truecaller's Android app settings. KAIRO cannot turn on another app's protected features automatically.") {
+                TextButton(onClick = {
+                    context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:com.truecaller")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                }) { Text("Open") }
+            }
+        }
+
         Section("Privacy") {
             InfoRow(
                 "What leaves the phone",
