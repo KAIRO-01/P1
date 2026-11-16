@@ -277,6 +277,13 @@ class VoiceSession private constructor(private val app: Application) : LiveClien
                 wave.watch(settings.waveToStop)
             }
             is LiveEvent.UserText -> {
+                // Recognize an exact spoken Stop command before passing text to assistant tools.
+                // Keep regular sentences containing the word "stop" unaffected.
+                val spokenCommand = event.text.trim().trimEnd('.', '!', '?', '।').trim()
+                if (spokenCommand.equals("stop", ignoreCase = true)) {
+                    stop("spoken stop")
+                    return
+                }
                 lastActivity = SystemClock.elapsedRealtime()
                 if (!heardUser) {
                     Diag.i("user: speech heard")
