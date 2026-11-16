@@ -28,9 +28,9 @@ class OfflineSpeech private constructor(private val context: Context) {
     fun available(): Boolean = runCatching { context.assets.list(ASSETS)?.isNotEmpty() == true }.getOrDefault(false)
 
     /** Listens for up to [MAX_MS]; [done] gets up to three guesses (none if nothing was said). */
-    fun listen(done: (List<String>) -> Unit) {
+    fun listen(onLevel: (Float) -> Unit = {}, done: (List<String>) -> Unit) {
         worker.execute {
-            val heard = runCatching { hear() }.getOrElse {
+            val heard = runCatching { hear(onLevel) }.getOrElse {
                 Diag.w("local: offline speech failed (${it.javaClass.simpleName})")
                 emptyList()
             }
@@ -47,7 +47,7 @@ class OfflineSpeech private constructor(private val context: Context) {
     }
 
     @SuppressLint("MissingPermission")
-    private fun hear(): List<String> {
+    private fun hear(onLevel: (Float) -> Unit): List<String> {
         val rate = 16_000
         val minBuffer = AudioRecord.getMinBufferSize(rate, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
         val record = AudioRecord(
@@ -75,6 +75,15 @@ class OfflineSpeech private constructor(private val context: Context) {
                 while (true) {
                     val read = record.read(chunk, 0, chunk.size)
                     if (read <= 0) break
+                    // Update the ball from the real offline microphone signal every 100 ms.
+                    var squareSum = 0.0
+                    for (i in 0 until read) {
+                        val v = chunk[i].toDouble()
+                        squareSum += v * v
+                    }
+                    val rms = kotlin.math.sqrt(squareSum / read)
+                    val amplitude = kotlin.math.sqrt((rms / 950.0).coerceIn(0.0, 1.0)).toFloat()
+                    main.post { onLevel(amplitude) }
                     val ended = recognizer.acceptWaveForm(chunk, read)
                     if (ended && speaking) break
                     val elapsed = SystemClock.elapsedRealtime() - start
