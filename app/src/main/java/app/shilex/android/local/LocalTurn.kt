@@ -217,11 +217,12 @@ class LocalTurn private constructor(private val context: Context) {
                 override fun onAudioAvailable(utteranceId: String?, audio: ByteArray?) {
                     // Not every TTS engine supplies PCM callbacks; when available the
                     // speaking orb follows the actual locally synthesized speech too.
-                    if (audio.isNullOrEmpty()) return
+                    val pcm = audio ?: return
+                    if (pcm.isEmpty()) return
                     var sum = 0.0
                     var i = 0
-                    while (i + 1 < audio.size) {
-                        val sample = ((audio[i + 1].toInt() shl 8) or (audio[i].toInt() and 0xFF)).toShort().toDouble()
+                    while (i + 1 < pcm.size) {
+                        val sample = ((pcm[i + 1].toInt() shl 8) or (pcm[i].toInt() and 0xFF)).toShort().toDouble()
                         sum += sample * sample
                         i += 2
                     }
