@@ -1,6 +1,11 @@
 package app.shilex.android.ui
 
 import android.Manifest
+import android.content.Intent
+import android.net.Uri
+import android.webkit.WebView
+import android.webkit.WebViewClient
+import android.webkit.WebResourceRequest
 import android.content.pm.PackageManager
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -19,6 +24,7 @@ import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.layout.size
+import androidx.compose.ui.viewinterop.AndroidView
 import androidx.compose.foundation.lazy.LazyColumn
 import androidx.compose.foundation.lazy.items
 import androidx.compose.foundation.lazy.rememberLazyListState
@@ -153,6 +159,12 @@ fun HomeScreen(
             Recent(activity.take(2), onSeeActivity)
         }
 
+        if (state.webSources.isNotEmpty() || state.searchQueries.isNotEmpty() || state.searchSuggestionsHtml.isNotBlank()) {
+            LiveSearchSources(
+                state.webSources, state.searchQueries, state.searchSuggestionsHtml
+            )
+        }
+
         Box(Modifier.fillMaxWidth().padding(vertical = 16.dp), contentAlignment = Alignment.Center) {
             val live = now.live
             FilledIconButton(
@@ -242,3 +254,85 @@ private fun Conversation(lines: List<Line>, modifier: Modifier) {
 }
 
 private const val TASK_SHOWN_MS = 2 * 60_000L
+
+
+/** Only displays URLs and search suggestions actually returned by Gemini Search grounding. */
+@Composable
+private fun LiveSearchSources(
+    sources: List<app.shilex.android.live.LiveEvent.WebSource>,
+    queries: List<String>,
+    suggestionsHtml: String,
+) {
+    val context = LocalContext.current
+    Column(
+        Modifier.fillMaxWidth().padding(bottom = 8.dp),
+        verticalArrangement = Arrangement.spacedBy(2.dp),
+    ) {
+        Text("LIVE WEB SOURCES", style = MaterialTheme.typography.labelSmall, color = Accent)
+        if (sources.isNotEmpty()) {
+            sources.take(3).forEach { source ->
+                TextButton(onClick = {
+                    runCatching {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, Uri.parse(source.url))
+                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                        )
+                    }
+                }) {
+                    Text(source.title.ifBlank { source.url }, maxLines = 1)
+                }
+            }
+        } else {
+            Text("Search performed. Source links may not be included by the voice service.",
+                style = MaterialTheme.typography.bodySmall, color = Muted)
+        }
+
+        if (suggestionsHtml.isNotBlank()) {
+            AndroidView(
+                modifier = Modifier.fillMaxWidth().height(64.dp),
+                factory = { app ->
+                    WebView(app).apply {
+                        settings.javaScriptEnabled = false
+                        settings.domStorageEnabled = false
+                        webViewClient = object : WebViewClient() {
+                            override fun shouldOverrideUrlLoading(
+                                view: WebView?, request: WebResourceRequest?
+                            ): Boolean {
+                                val url = request?.url ?: return true
+                                if (url.scheme == "https") {
+                                    runCatching {
+                                        app.startActivity(
+                                            Intent(Intent.ACTION_VIEW, url)
+                                                .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                                        )
+                                    }
+                                }
+                                return true
+                            }
+                        }
+                    }
+                },
+                update = { view ->
+                    if (view.tag != suggestionsHtml) {
+                        view.tag = suggestionsHtml
+                        view.loadDataWithBaseURL("https://www.google.com/", suggestionsHtml,
+                            "text/html", "UTF-8", null)
+                    }
+                },
+            )
+        } else if (queries.isNotEmpty()) {
+            queries.take(2).forEach { query ->
+                TextButton(onClick = {
+                    val uri = Uri.parse("https://www.google.com/search?q=" + Uri.encode(query))
+                    runCatching {
+                        context.startActivity(
+                            Intent(Intent.ACTION_VIEW, uri).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                        )
+                    }
+                }) {
+                    Text("Google Search: " + query, maxLines = 1)
+                }
+            }
+        }
+    }
+}
