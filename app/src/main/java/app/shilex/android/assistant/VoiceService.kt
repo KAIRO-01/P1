@@ -163,7 +163,7 @@ class VoiceService : Service() {
 
         fun wakeWordWanted(context: Context): Boolean =
             Settings(context).wakeWord &&
-                WakeWordModel.available(context) &&
+                WakeListener.available(context) &&
                 ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
 
         /**
