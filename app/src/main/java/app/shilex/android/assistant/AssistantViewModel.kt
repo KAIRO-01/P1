@@ -13,7 +13,7 @@ import app.shilex.android.task.Task
 import app.shilex.android.task.TaskTracker
 import app.shilex.android.wake.VoiceProfile
 import app.shilex.android.wake.VoiceSetup
-import app.shilex.android.wake.WakeWordModel
+import app.shilex.android.wake.WakeListener
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.flow.MutableStateFlow
 import kotlinx.coroutines.flow.StateFlow
@@ -111,8 +111,8 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
 
     fun micUnavailable() = session.micUnavailable()
 
-    /** Only debug builds carry the (non-commercial) wake-word model. */
-    val wakeWordAvailable: Boolean = WakeWordModel.available(app)
+    /** Custom ONNX model if installed; otherwise the bundled offline recognizer. */
+    val wakeWordAvailable: Boolean = WakeListener.available(app)
 
     val wakeWordOn: Boolean get() = Settings(getApplication()).wakeWord
 
