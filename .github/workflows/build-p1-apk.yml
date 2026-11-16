@@ -64,4 +64,4 @@ jobs:
           TAG="p1-preview-${GITHUB_RUN_NUMBER}"
           gh release create "$TAG" "app/build/outputs/apk/debug/app-debug.apk#P1-KAIRO-preview.apk" \
             --target "$GITHUB_SHA" --title "P1 KAIRO APK Preview #${GITHUB_RUN_NUMBER}" --prerelease \
-            --notes "Independent P1 KAIRO Android preview. Tap to talk with Gemini API key. Spoken Stop handling is added, but listening over speaker still needs device testing. The trained Hey Kairo wake-word ONNX model is NOT included yet. This build uses a fresh debug signature; uninstall an older P1 preview if updating fails."
+            --notes "Independent P1 KAIRO Android preview. Tap to talk with Gemini API key. Spoken Stop handling is added, but listening over speaker still needs device testing. The trained Hey Kairo wake-word ONNX model is NOT included yet. WARNING: This build uses a fresh debug signing key. DO NOT uninstall or clear app storage if KAIRO has saved memory; update requires a matching signing key or a verified complete backup and restore plan."

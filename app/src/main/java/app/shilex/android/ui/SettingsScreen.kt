@@ -326,8 +326,9 @@ fun SettingsScreen(assistant: AssistantViewModel) {
                     "Works only with a live accessible link; an imported CSV cannot update itself. " +
                     "Allow Android notifications to receive alerts.",
                 watchChanges,
-                enabled = sheetLink.isNotBlank(),
+                enabled = OrderSheet.parseLink(sheetLink) != null,
             ) { enable ->
+                sheetSettings.orderSheetUrl = sheetLink.trim()
                 if (SheetWatch.configure(context, enable)) {
                     watchChanges = enable
                     sheetStatus = if (enable) "Change alerts scheduled; first successful check sets a baseline." else "Change alerts turned off."
@@ -348,6 +349,8 @@ fun SettingsScreen(assistant: AssistantViewModel) {
                         sheetStatus = "Saved. Tap Test to check whether the Sheet is readable."
                     }
                 }) { Text("Save link") }
+            }
+            InfoRow("Test connection", "Check the linked Sheet or the saved private CSV.") {
                 TextButton(onClick = {
                     if (sheetLink.isNotBlank() && OrderSheet.parseLink(sheetLink) != null) {
                         sheetSettings.orderSheetUrl = sheetLink.trim()
@@ -362,6 +365,8 @@ fun SettingsScreen(assistant: AssistantViewModel) {
                         } catch (e: Exception) { "Cannot read source: ${e.message}" }
                     }
                 }) { Text("Test") }
+            }
+            InfoRow("Import private CSV", "Read private order data without making the Sheet public. Re-import for changes.") {
                 TextButton(onClick = { csvPicker.launch(arrayOf("text/comma-separated-values", "text/csv", "text/plain", "application/vnd.ms-excel")) }) {
                     Text("Import CSV")
                 }
@@ -490,8 +495,9 @@ fun SettingsScreen(assistant: AssistantViewModel) {
         Section("Privacy") {
             InfoRow(
                 "What leaves the phone",
-                "The wake word and local commands stay on this phone. Gemini gets only requests the phone can't handle. " +
-                    "Nothing is recorded. The diagnostic log keeps timings and states, never your words.",
+                "Wake-word audio stays on this phone. When you ask about Google Sheet orders, relevant order details " +
+                    "are sent to Gemini for the spoken answer. The CSV and stored link remain in app-private storage. " +
+                    "Diagnostic logs keep timings and states, not spoken words.",
             )
             InfoRow("Standby", "Between requests only the wake word runs; Gemini is disconnected.")
             val memory = remember { MemoryStore(context) }
