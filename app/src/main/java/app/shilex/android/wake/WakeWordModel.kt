@@ -125,7 +125,7 @@ class WakeWordModel(context: Context) : AutoCloseable {
 
     companion object {
         const val CHUNK = 1280 // 80 ms at 16 kHz
-        const val PHRASE = "Hey Jarvis"
+        const val PHRASE = "Hey Kairo"
         private const val CONTEXT = 480
         private const val MEL_BINS = 32
         private const val MEL_WINDOW = 76
