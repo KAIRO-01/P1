@@ -121,7 +121,7 @@ class ReminderCallActivity : ComponentActivity() {
         val engine = tts ?: return
         // Voice selection is local-only. Some phones ship a network TTS default, which
         // must not be used for this free/offline reminder.
-        val wantsHindi = reminderText.any { it in '\\u0900'..'\\u097F' }
+        val wantsHindi = reminderText.any { it.code in 0x0900..0x097F }
         val language = if (wantsHindi) "hi" else "en"
         val voices = runCatching { engine.voices.orEmpty() }.getOrDefault(emptySet())
             .filter { !it.isNetworkConnectionRequired && it.locale.language == language }
