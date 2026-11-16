@@ -11,7 +11,7 @@ android {
     compileSdk = 35
 
     defaultConfig {
-        applicationId = "app.shilex.android"
+        applicationId = "app.shilex.android.p1"
         minSdk = 29
         targetSdk = 35
         versionCode = 1
