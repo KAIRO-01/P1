@@ -151,6 +151,30 @@ object WorkApproval {
         return had
     }
     @Synchronized fun pending(): Boolean = waiting != null
+    @Synchronized fun preview(): String? {
+        val p = waiting ?: return null
+        return runCatching {
+            val list = JSONObject(p.raw).getJSONArray("assignments")
+            (0 until list.length()).joinToString("; ") { i ->
+                val one = list.getJSONObject(i)
+                one.optString("worker") + ": " + one.optString("task") +
+                    " (" + one.optString("order") + ")" +
+                    if (one.optString("due").isNotBlank()) ", due " + one.optString("due") else ""
+            }
+        }.getOrNull()
+    }
+    /** The user can explicitly confirm by tapping when audio transcription misses their Yes. */
+    @Synchronized fun approveTap(context: Context): String {
+        val p = waiting ?: return "No worker tasks pending approval."
+        if (System.currentTimeMillis() - p.since > 180_000L) {
+            waiting = null
+            return "Approval expired. Ask KAIRO to propose the tasks again."
+        }
+        waiting = null
+        return runCatching { WorkMemory(context).commit(JSONObject(p.raw)) }
+            .getOrElse { "Could not save: " + (it.message ?: "unknown error") }
+    }
+
 
     @Synchronized fun spoken(context: Context, words: String): String? {
         val p = waiting ?: return null
