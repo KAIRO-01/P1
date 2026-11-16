@@ -20,6 +20,9 @@ import androidx.compose.ui.unit.dp
 import androidx.compose.material3.TextButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
+import androidx.compose.material3.OutlinedTextField
+import app.shilex.android.reminders.DailyReview
+import app.shilex.android.memory.ProjectMemory
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -90,6 +93,8 @@ fun AutomationsScreen() {
             )
         }
         Routines()
+        DailyReviewSetup()
+        ProjectMemorySummary()
         ReminderPreview()
         Group("On this phone", "Works without internet and doesn't use your Gemini key.", Accent, "Local", LOCAL)
         Group("Tasks with your OK", "Gemini plans them; you finish anything that sends, calls or pays.", Warning, "Needs you", TASKS)
@@ -168,7 +173,7 @@ private fun ReminderPreview() {
         Column(Modifier.padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("KAIRO reminder calls", style = MaterialTheme.typography.titleLarge)
             Text(
-                "Free and offline. KAIRO rings like a call; only after you tap Answer does it speak the reminder. No SIM call, account or Gemini API needed.",
+                "Free local ringtone. After Answer, KAIRO uses Gemini for a two-way AI conversation when connected; without it, the reminder is read offline. No SIM call.",
                 style = MaterialTheme.typography.bodySmall,
                 color = Muted,
             )
@@ -200,6 +205,90 @@ private fun ReminderPreview() {
                 )
             }
             if (note.isNotEmpty()) Text(note, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+/** User chooses the time before any automatic daily review call is created. */
+@Composable
+private fun DailyReviewSetup() {
+    val context = LocalContext.current
+    val review = remember(context) { DailyReview(context) }
+    var time by remember { mutableStateOf(review.timeLabel()) }
+    var active by remember { mutableStateOf(review.enabled) }
+    var note by remember { mutableStateOf("") }
+    Section(null) {
+        Column(Modifier.padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("Daily AI work-review call", style = MaterialTheme.typography.titleLarge)
+            Text(
+                "Opt-in. Select a daily time; KAIRO calls with saved pending projects. Answer to discuss work using two-way AI.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Muted,
+            )
+            Text(if (active) "Enabled at " + review.timeLabel() else "Daily calls OFF until you select and save a time",
+                color = if (active) Accent else Muted)
+            OutlinedTextField(
+                value = time,
+                onValueChange = { time = it.take(5) },
+                label = { Text("Daily time (24-hour HH:mm)") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            Row(horizontalArrangement = Arrangement.spacedBy(10.dp)) {
+                Button(onClick = {
+                    val parts = time.trim().split(":")
+                    val hour = parts.getOrNull(0)?.toIntOrNull()
+                    val minute = parts.getOrNull(1)?.toIntOrNull()
+                    if (parts.size != 2 || hour == null || minute == null || hour !in 0..23 || minute !in 0..59) {
+                        note = "Enter time like 09:00 or 17:30."
+                    } else {
+                        review.enable(hour, minute)
+                        active = true
+                        note = "Daily review scheduled at " + review.timeLabel() +
+                            ". Keep KAIRO notifications enabled. Exact timing may require Alarms & reminders access."
+                    }
+                }) { Text("Save daily time") }
+                if (active) {
+                    OutlinedButton(onClick = {
+                        review.disable()
+                        active = false
+                        note = "Daily review calls disabled."
+                    }) { Text("Turn off") }
+                }
+            }
+            if (note.isNotBlank()) Text(note, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+@Composable
+private fun ProjectMemorySummary() {
+    val context = LocalContext.current
+    val store = remember(context) { ProjectMemory(context) }
+    var projects by remember { mutableStateOf(store.all()) }
+    LifecycleResumeEffect(Unit) {
+        projects = store.all()
+        onPauseOrDispose {}
+    }
+    Section(null) {
+        Column(Modifier.padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(8.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Project Memory V2", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                TextButton(onClick = { projects = store.all() }) { Text("Refresh") }
+            }
+            Text("Stored only after you explicitly confirm a project change. Data stays on this phone.",
+                style = MaterialTheme.typography.bodySmall, color = Muted)
+            if (projects.isEmpty()) {
+                Text("No confirmed projects yet. Tell KAIRO about a project and say yes when it asks to save.",
+                    style = MaterialTheme.typography.bodySmall, color = Muted)
+            }
+            projects.take(12).forEach { p ->
+                InfoRow(p.title, listOfNotNull(
+                    p.worker.takeIf { it.isNotBlank() }?.let { "Worker: " + it },
+                    p.due.takeIf { it.isNotBlank() }?.let { "Due: " + it },
+                    "Status: " + p.status,
+                ).joinToString(" · "))
+            }
         }
     }
 }
