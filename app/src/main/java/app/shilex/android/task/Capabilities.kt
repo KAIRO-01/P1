@@ -32,6 +32,7 @@ object Capabilities {
         Capability("device_control", "Phone controls", Risk.Low),
         Capability("get_current_datetime", "Check the time", Risk.Low),
         Capability("get_weather", "Check the weather", Risk.Low),
+        Capability("get_encyclopedia", "Free encyclopedia lookup", Risk.Low),
         Capability("open_web_search", "Search the web", Risk.Low),
         Capability("ui_read", "Read the screen", Risk.Medium),
         Capability("notifications_check", "Check notifications", Risk.Medium),
