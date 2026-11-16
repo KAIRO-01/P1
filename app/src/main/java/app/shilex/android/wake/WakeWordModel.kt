@@ -132,7 +132,7 @@ class WakeWordModel(context: Context) : AutoCloseable {
         private const val EMBEDDING = 96
         private const val WARM_UP = 5
         private const val DIR = "wake"
-        private const val WORD_MODEL = "hey_jarvis_v0.1.onnx"
+        private const val WORD_MODEL = "hey_kairo.onnx"
 
         /** False in builds without the models (release builds). */
         fun available(context: Context): Boolean =
