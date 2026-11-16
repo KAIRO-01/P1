@@ -95,7 +95,8 @@ class SightAim(private val http: OkHttpClient, private val apiKey: String) {
 
     private companion object {
         const val ENDPOINT = "https://generativelanguage.googleapis.com/v1beta/models"
-        const val MODEL = "gemini-flash-latest"
+        // Use an explicitly documented free-tier model; never rely on the "latest" alias.
+        const val MODEL = "gemini-3-flash-preview"
         const val MAX_SIDE = 1024f
         const val LABEL_PX = 22f
         const val FAILED = "Gemini couldn't look at the screen just now."
