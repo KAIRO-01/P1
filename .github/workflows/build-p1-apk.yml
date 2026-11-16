@@ -15,6 +15,11 @@ on:
 permissions:
   contents: write
 
+# Only spend CI time on the newest P1 preview while code is being updated.
+concurrency:
+  group: kairo-p1-preview-${{ github.ref }}
+  cancel-in-progress: true
+
 jobs:
   build:
     runs-on: ubuntu-latest
