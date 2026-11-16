@@ -42,6 +42,7 @@ import androidx.lifecycle.compose.LifecycleResumeEffect
 import app.shilex.android.memory.MemoryRules
 import app.shilex.android.memory.MemoryStore
 import app.shilex.android.wake.WakeWordModel
+import org.json.JSONObject
 
 private class Command(val title: String, val examples: String)
 
@@ -266,6 +267,41 @@ private fun ProjectMemorySummary() {
     val context = LocalContext.current
     val store = remember(context) { ProjectMemory(context) }
     var projects by remember { mutableStateOf(store.all()) }
+    var notice by remember { mutableStateOf("") }
+    var backupToImport by remember { mutableStateOf<String?>(null) }
+
+    val exportPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                val output = context.contentResolver.openOutputStream(uri)
+                    ?: error("Android could not open the chosen file")
+                output.bufferedWriter(Charsets.UTF_8).use { it.write(store.exportJson()) }
+            }.onSuccess { notice = "Project backup saved. Keep this private file safe." }
+                .onFailure { notice = "Backup export failed: " + (it.message ?: "Unknown error") }
+        }
+    }
+
+    val importPicker = rememberLauncherForActivityResult(
+        ActivityResultContracts.OpenDocument(),
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                val input = context.contentResolver.openInputStream(uri)
+                    ?: error("Android could not read the selected file")
+                val text = input.bufferedReader(Charsets.UTF_8).use { it.readText() }
+                require(text.length <= 2_000_000) { "File is too large" }
+                val parsed = JSONObject(text)
+                require(parsed.optString("format") == "KAIRO_PROJECTS_V2") { "This is not a KAIRO project backup" }
+                text to parsed.getJSONArray("projects").length()
+            }.onSuccess { (raw, count) ->
+                backupToImport = raw
+                notice = "Ready to restore " + count + " projects. Review below and confirm import; existing names may be updated."
+            }.onFailure { notice = "Cannot import: " + (it.message ?: "Invalid file") }
+        }
+    }
+
     LifecycleResumeEffect(Unit) {
         projects = store.all()
         onPauseOrDispose {}
@@ -276,7 +312,7 @@ private fun ProjectMemorySummary() {
                 Text("Project Memory V2", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
                 TextButton(onClick = { projects = store.all() }) { Text("Refresh") }
             }
-            Text("Stored only after you explicitly confirm a project change. Data stays on this phone.",
+            Text("Saved only after explicit project confirmation. Data stays on this phone.",
                 style = MaterialTheme.typography.bodySmall, color = Muted)
             if (projects.isEmpty()) {
                 Text("No confirmed projects yet. Tell KAIRO about a project and say yes when it asks to save.",
@@ -289,6 +325,35 @@ private fun ProjectMemorySummary() {
                     "Status: " + p.status,
                 ).joinToString(" · "))
             }
+            Text("Backup includes project records and confirmed update history, not passwords or Gemini settings. Export before uninstalling a test APK.",
+                style = MaterialTheme.typography.bodySmall, color = Muted)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { exportPicker.launch("kairo-projects-v2.json") }) { Text("Export backup") }
+                OutlinedButton(onClick = { importPicker.launch(arrayOf("application/json", "text/plain")) }) { Text("Import backup") }
+            }
+            if (backupToImport != null) {
+                Text("Import may overwrite project records with matching names. Do you approve?",
+                    style = MaterialTheme.typography.bodyMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = {
+                        val raw = backupToImport
+                        if (raw != null) {
+                            runCatching { store.importJson(raw) }
+                                .onSuccess { count ->
+                                    projects = store.all()
+                                    notice = "Restored " + count + " projects."
+                                    backupToImport = null
+                                }
+                                .onFailure { notice = "Import failed: " + (it.message ?: "Unknown error") }
+                        }
+                    }) { Text("Confirm import") }
+                    OutlinedButton(onClick = {
+                        backupToImport = null
+                        notice = "Import cancelled. Nothing changed."
+                    }) { Text("Cancel") }
+                }
+            }
+            if (notice.isNotBlank()) Text(notice, style = MaterialTheme.typography.bodySmall)
         }
     }
 }
