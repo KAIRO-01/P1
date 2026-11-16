@@ -146,6 +146,9 @@ fun SettingsScreen(assistant: AssistantViewModel) {
                     Build.VERSION.SDK_INT < 34 || manager.canUseFullScreenIntent(),
                 )
             }
+            var exactAlarmsAllowed by remember {
+                mutableStateOf(Reminders(context).exact())
+            }
             val requestNotifications = rememberLauncherForActivityResult(
                 ActivityResultContracts.RequestPermission(),
             ) { notificationsAllowed = it }
@@ -154,6 +157,7 @@ fun SettingsScreen(assistant: AssistantViewModel) {
                     ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
                     PackageManager.PERMISSION_GRANTED
                 callsAllowed = Build.VERSION.SDK_INT < 34 || manager.canUseFullScreenIntent()
+                exactAlarmsAllowed = Reminders(context).exact()
                 onPauseOrDispose { }
             }
 
@@ -169,6 +173,31 @@ fun SettingsScreen(assistant: AssistantViewModel) {
                         requestNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
                     }
                 }) { Text(if (notificationsAllowed) "Test call" else "Allow") }
+            }
+            if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S) {
+                InfoRow(
+                    "Exact reminder time",
+                    if (exactAlarmsAllowed) "Allowed. KAIRO can schedule reminders for the specified time."
+                    else "Not allowed. Android may delay the reminder until later.",
+                ) {
+                    if (!exactAlarmsAllowed) {
+                        TextButton(onClick = {
+                            runCatching {
+                                context.startActivity(
+                                    Intent(Settings.ACTION_REQUEST_SCHEDULE_EXACT_ALARM,
+                                        Uri.parse("package:${context.packageName}"))
+                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                                )
+                            }.onFailure {
+                                context.startActivity(
+                                    Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                        Uri.parse("package:${context.packageName}"))
+                                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                                )
+                            }
+                        }) { Text("Allow") }
+                    }
+                }
             }
             if (Build.VERSION.SDK_INT >= 34) {
                 InfoRow(
