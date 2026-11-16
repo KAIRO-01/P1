@@ -13,11 +13,13 @@ import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
 import androidx.compose.foundation.layout.Spacer
+import androidx.compose.foundation.layout.fillMaxWidth
 import androidx.compose.foundation.layout.fillMaxSize
 import androidx.compose.foundation.layout.height
 import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
+import androidx.compose.material3.OutlinedTextField
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -25,6 +27,7 @@ import androidx.compose.runtime.Composable
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
+import androidx.compose.runtime.rememberCoroutineScope
 import androidx.compose.runtime.setValue
 import androidx.compose.ui.Modifier
 import androidx.compose.ui.platform.LocalContext
@@ -39,6 +42,11 @@ import app.shilex.android.notify.NotificationWatch
 import app.shilex.android.orb.FloatingOrb
 import app.shilex.android.reminders.Reminders
 import app.shilex.android.wake.WakeWordModel
+import app.shilex.android.sheets.OrderSheet
+import kotlinx.coroutines.Dispatchers
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.withContext
+import okhttp3.OkHttpClient
 
 @Composable
 fun SettingsScreen(assistant: AssistantViewModel) {
@@ -255,6 +263,74 @@ fun SettingsScreen(assistant: AssistantViewModel) {
                 )
             } else {
                 InfoRow("Not in this build", "The wake word ships once ${Branding.ASSISTANT_NAME} has its own model.")
+            }
+        }
+
+
+        Section("Google Sheets - customer orders") {
+            val sheetSettings = remember { AppSettings(context) }
+            var sheetLink by remember { mutableStateOf(sheetSettings.orderSheetUrl) }
+            var sheetStatus by remember { mutableStateOf(
+                if (sheetLink.isBlank() && !OrderSheet.hasImport(context)) "Not connected."
+                else "Saved source ready for testing."
+            ) }
+            val sheetScope = rememberCoroutineScope()
+            val csvPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+                if (uri != null) sheetScope.launch {
+                    sheetStatus = "Importing your private CSV..."
+                    sheetStatus = try {
+                        val count = withContext(Dispatchers.IO) {
+                            val stream = context.contentResolver.openInputStream(uri)
+                                ?: error("Could not open the selected CSV.")
+                            OrderSheet.importCsv(context, stream)
+                        }
+                        "Imported $count orders privately. Voice queries now work from this CSV until you import a newer export."
+                    } catch (e: Exception) { "Import failed: ${e.message}" }
+                }
+            }
+            Text(
+                "Paste a Google Sheet link below. KAIRO can read live data only if Google permits link access. " +
+                    "For PRIVATE customer data, do NOT make the Sheet public: export a CSV and import it here. " +
+                    "Google Account OAuth for live private Sheets requires separate authorization.",
+                style = MaterialTheme.typography.bodySmall,
+            )
+            OutlinedTextField(
+                value = sheetLink,
+                onValueChange = { sheetLink = it },
+                label = { Text("Google Sheet link") },
+                placeholder = { Text("https://docs.google.com/spreadsheets/d/...") },
+                singleLine = true,
+                modifier = Modifier.fillMaxWidth(),
+            )
+            InfoRow("Order data", sheetStatus) {
+                TextButton(onClick = {
+                    if (sheetLink.isBlank()) {
+                        sheetSettings.orderSheetUrl = ""
+                        sheetStatus = if (OrderSheet.hasImport(context)) "Sheet link cleared; private CSV remains saved." else "Sheet link cleared."
+                    } else if (OrderSheet.parseLink(sheetLink) == null) {
+                        sheetStatus = "Invalid link. Copy the complete link from Google Sheets."
+                    } else {
+                        sheetSettings.orderSheetUrl = sheetLink.trim()
+                        sheetStatus = "Saved. Tap Test to check whether the Sheet is readable."
+                    }
+                }) { Text("Save link") }
+                TextButton(onClick = {
+                    if (sheetLink.isNotBlank() && OrderSheet.parseLink(sheetLink) != null) {
+                        sheetSettings.orderSheetUrl = sheetLink.trim()
+                    }
+                    sheetScope.launch {
+                        sheetStatus = "Checking the source..."
+                        sheetStatus = try {
+                            val snap = withContext(Dispatchers.IO) {
+                                OrderSheet.load(context, OkHttpClient())
+                            }
+                            "Connected: ${snap.orders.size} orders from ${snap.source}. Say 'KAIRO, which mandirs are due in four days?'"
+                        } catch (e: Exception) { "Cannot read source: ${e.message}" }
+                    }
+                }) { Text("Test") }
+                TextButton(onClick = { csvPicker.launch(arrayOf("text/comma-separated-values", "text/csv", "text/plain", "application/vnd.ms-excel")) }) {
+                    Text("Import CSV")
+                }
             }
         }
 

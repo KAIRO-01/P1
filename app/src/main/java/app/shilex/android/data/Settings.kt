@@ -21,6 +21,11 @@ class Settings(context: Context) {
         get() = prefs.getBoolean("live_web_search", false)
         set(value) = prefs.edit().putBoolean("live_web_search", value).apply()
 
+    /** Read-only URL. The Sheet is never made public by KAIRO. */
+    var orderSheetUrl: String
+        get() = prefs.getString("order_sheet_url", "") ?: ""
+        set(value) = prefs.edit().putString("order_sheet_url", value.trim()).apply()
+
     var voice: String
         get() = prefs.getString("voice", "Puck") ?: "Puck"
         set(value) = prefs.edit().putString("voice", value).apply()

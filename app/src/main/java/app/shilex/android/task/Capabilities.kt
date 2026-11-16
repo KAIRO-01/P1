@@ -23,6 +23,7 @@ object Capabilities {
     private val all = listOf(
         Capability("open_app", "Open an app", Risk.Low),
         Capability("navigate_to", "Navigate with Google Maps", Risk.Low),
+        Capability("sheet_orders", "Read Google Sheets orders", Risk.Low),
         Capability("set_alarm", "Set an alarm", Risk.Low),
         Capability("set_timer", "Start a timer", Risk.Low),
         Capability("reminder_set", "Set a reminder", Risk.Low),
