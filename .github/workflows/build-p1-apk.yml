@@ -41,6 +41,10 @@ jobs:
         run: |
           sdkmanager --install "platforms;android-35" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
           yes | sdkmanager --licenses >/dev/null || true
+      - name: Test order parsing and core logic
+        run: |
+          chmod +x gradlew
+          ./gradlew --no-daemon --stacktrace :app:testDebugUnitTest
       - name: Build KAIRO APK
         run: |
           chmod +x gradlew

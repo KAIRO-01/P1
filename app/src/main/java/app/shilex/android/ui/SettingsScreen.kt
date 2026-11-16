@@ -5,6 +5,8 @@ import android.app.NotificationManager
 import android.content.Intent
 import android.content.pm.PackageManager
 import android.net.Uri
+import android.location.LocationManager
+import androidx.core.app.NotificationManagerCompat
 import android.os.Build
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
@@ -56,8 +58,22 @@ fun SettingsScreen(assistant: AssistantViewModel) {
     var networkOn by remember { mutableStateOf(assistant.networkSpeech) }
     var engine by remember { mutableStateOf(assistant.speechEngine) }
     var batteryExempt by remember { mutableStateOf(assistant.batteryExempt) }
+    var microphoneOn by remember { mutableStateOf(ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED) }
+    var gpsOn by remember { mutableStateOf(false) }
+    var mapsLocationOn by remember { mutableStateOf(false) }
+    var notificationsOn by remember { mutableStateOf(false) }
+    val refreshPermissions = {
+        microphoneOn = ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        val location = context.getSystemService(LocationManager::class.java)
+        gpsOn = location.isProviderEnabled(LocationManager.GPS_PROVIDER) || location.isProviderEnabled(LocationManager.NETWORK_PROVIDER)
+        mapsLocationOn = listOf(Manifest.permission.ACCESS_FINE_LOCATION, Manifest.permission.ACCESS_COARSE_LOCATION).any {
+            context.packageManager.checkPermission(it, "com.google.android.apps.maps") == PackageManager.PERMISSION_GRANTED
+        }
+        notificationsOn = NotificationManagerCompat.from(context).areNotificationsEnabled()
+    }
     LifecycleResumeEffect(Unit) {
         batteryExempt = assistant.batteryExempt
+        refreshPermissions()
         engine = assistant.speechEngine
         onPauseOrDispose { }
     }
@@ -382,13 +398,54 @@ fun SettingsScreen(assistant: AssistantViewModel) {
             }
         }
 
+        Section("Permissions status") {
+            InfoRow("Microphone: " + if (microphoneOn) "ON" else "OFF", "Required to hear your voice.") {
+                TextButton(onClick = {
+                    context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:${context.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                }) { Text("Review") }
+            }
+            InfoRow("Device GPS: " + if (gpsOn) "ON" else "OFF", "Google Maps must be able to determine your current location.") {
+                TextButton(onClick = { open(Settings.ACTION_LOCATION_SOURCE_SETTINGS) }) { Text("Review") }
+            }
+            InfoRow("Google Maps location: " + if (mapsLocationOn) "ON" else "OFF", "Maps, not KAIRO, reads your GPS location for navigation.") {
+                TextButton(onClick = {
+                    context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:com.google.android.apps.maps")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                }) { Text("Review") }
+            }
+            InfoRow("Notifications: " + if (notificationsOn) "ON" else "OFF", "For reminders and Android alerts.") {
+                TextButton(onClick = {
+                    context.startActivity(Intent(Settings.ACTION_APP_NOTIFICATION_SETTINGS)
+                        .putExtra(Settings.EXTRA_APP_PACKAGE, context.packageName)
+                        .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                }) { Text("Review") }
+            }
+            InfoRow("Notification reader: " + if (NotificationWatch.allowed(context)) "ON" else "OFF", "Needed for 'what did I miss?' messages.") {
+                TextButton(onClick = { open(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS) }) { Text("Review") }
+            }
+            InfoRow("Floating overlay: " + if (FloatingOrb.allowed(context)) "ON" else "OFF", "Required if you want the KAIRO orb over other apps.") {
+                TextButton(onClick = {
+                    context.startActivity(Intent(Settings.ACTION_MANAGE_OVERLAY_PERMISSION,
+                        Uri.parse("package:${context.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                }) { Text("Review") }
+            }
+            InfoRow("Exact reminders: " + if (Reminders(context).exact()) "ON" else "OFF", "Android controls exact alarm permission.") {
+                TextButton(onClick = {
+                    context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:${context.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
+                }) { Text("Review") }
+            }
+        }
+
         Section("Quick permission setup") {
             InfoRow("Microphone", "Required for KAIRO voice commands. Android will ask you to allow it.") {
                 val microphone = rememberLauncherForActivityResult(ActivityResultContracts.RequestPermission()) {}
                 TextButton(onClick = {
                     if (ContextCompat.checkSelfPermission(context, Manifest.permission.RECORD_AUDIO) != PackageManager.PERMISSION_GRANTED)
                         microphone.launch(Manifest.permission.RECORD_AUDIO)
-                    else open(Settings.ACTION_APPLICATION_DETAILS_SETTINGS)
+                    else context.startActivity(Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                        Uri.parse("package:${context.packageName}")).addFlags(Intent.FLAG_ACTIVITY_NEW_TASK))
                 }) { Text("Review") }
             }
             InfoRow("Current location / GPS", "Google Maps uses your live location for navigation. Enable device location and grant Maps location permission.") {

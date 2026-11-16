@@ -3,6 +3,7 @@ package app.shilex.android.sheets
 import android.content.Context
 import app.shilex.android.data.Settings
 import java.io.InputStream
+import java.io.ByteArrayOutputStream
 import java.net.URI
 import java.time.LocalDate
 import java.time.format.DateTimeFormatter
@@ -47,7 +48,7 @@ object OrderSheet {
     fun hasImport(context: Context): Boolean = context.getFileStreamPath(CSV_FILE).exists()
 
     fun importCsv(context: Context, stream: InputStream): Int {
-        val bytes = stream.use { it.readNBytes(MAX_BYTES + 1) }
+        val bytes = stream.use(::limitedBytes)
         require(bytes.size <= MAX_BYTES) { "CSV file is too large (maximum 3 MB)." }
         val parsed = decode(bytes)
         require(parsed.isNotEmpty()) { "No customer orders were found in the CSV." }
@@ -66,7 +67,7 @@ object OrderSheet {
                 val bytes = http.newCall(request).execute().use { response ->
                     if (!response.isSuccessful) throw IllegalStateException("Google refused access (HTTP ${response.code}).")
                     val input = response.body?.byteStream() ?: error("Google returned an empty response.")
-                    input.use { it.readNBytes(MAX_BYTES + 1) }
+                    input.use(::limitedBytes)
                 }
                 if (bytes.size > MAX_BYTES) error("Sheet exceeds the 3 MB preview limit.")
                 val text = String(bytes, Charsets.UTF_8).trimStart()
@@ -85,10 +86,23 @@ object OrderSheet {
             }
         }
         if (hasImport(context)) {
-            val bytes = context.openFileInput(CSV_FILE).use { it.readNBytes(MAX_BYTES + 1) }
+            val bytes = context.openFileInput(CSV_FILE).use { limitedBytes(it) }
             return Snapshot(decode(bytes), if (reason.isNotEmpty()) "imported CSV (live link inaccessible)" else "imported CSV", false)
         }
         throw IllegalStateException("Open KAIRO Settings > Google Sheets and save a link or import a CSV.")
+    }
+
+    /** Bounded streaming works on Android 10 too; readNBytes requires newer Android APIs. */
+    private fun limitedBytes(input: InputStream): ByteArray {
+        val output = ByteArrayOutputStream()
+        val buffer = ByteArray(8192)
+        while (true) {
+            val size = input.read(buffer)
+            if (size < 0) break
+            if (output.size() + size > MAX_BYTES) throw IllegalArgumentException("CSV exceeds the 3 MB limit.")
+            output.write(buffer, 0, size)
+        }
+        return output.toByteArray()
     }
 
     fun decode(bytes: ByteArray): List<Order> {
