@@ -17,7 +17,7 @@ object ReminderTools {
 
         override fun declaration() = Schema.function(
             name,
-            "Sets a reminder: a notification on this phone at a time. Give either at or in_minutes.",
+            "Sets a FREE call-style reminder on this phone. At the due time KAIRO rings, shows Answer/Dismiss, and speaks the reminder OFFLINE only after the user taps Answer. No phone call or paid API. Give either at or in_minutes.",
             Schema.string("text", "What to remind about, short, in the user's words.", required = true),
             Schema.string("at", "Local time: YYYY-MM-DDTHH:MM, or HH:MM for the next such time."),
             Schema.integer("in_minutes", "Minutes from now, for \"in 20 minutes\"."),
