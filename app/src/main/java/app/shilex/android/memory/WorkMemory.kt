@@ -54,6 +54,18 @@ class WorkMemory(private val context: Context) :
             }
         }.take(30)
     }
+    /** Audit trail survives worker reassignment or task edits. */
+    fun historyFor(taskId: Long): List<String> {
+        val lines = mutableListOf<String>()
+        readableDatabase.rawQuery(
+            "SELECT description FROM changes WHERE assignment_id=? ORDER BY id DESC LIMIT 12",
+            arrayOf(taskId.toString())
+        ).use { cursor ->
+            while (cursor.moveToNext()) lines += cursor.getString(0)
+        }
+        return lines
+    }
+
     fun summary(): String {
         val open = tasks().filterNot { done(it.status) }
         if (open.isEmpty()) return "No confirmed pending worker assignments yet."
