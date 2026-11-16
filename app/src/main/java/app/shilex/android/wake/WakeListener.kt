@@ -23,10 +23,14 @@ class WakeListener(private val context: Context, private val onWake: () -> Unit)
     @Volatile private var profile: VoiceProfile? = null
     private var thread: Thread? = null
     private var model: WakeWordModel? = null
+    private val fallback = VoskWakeListener(context, onWake)
     private val audio = context.getSystemService(AudioManager::class.java)
 
     /** Callers check RECORD_AUDIO first. Returns false if the model or mic isn't available. */
     fun start(): Boolean {
+        // Until a custom ONNX model is trained, use the bundled offline speech engine.
+        if (!WakeWordModel.available(context)) return fallback.start()
+        fallback.stop()
         if (running) {
             profile = VoiceProfile.load(context) // a new or forgotten voice applies at once
             return true
@@ -181,12 +185,16 @@ class WakeListener(private val context: Context, private val onWake: () -> Unit)
     }
 
     fun stop() {
+        fallback.stop()
         if (!running) return
         running = false
         Diag.i("wake: paused")
     }
 
-    private companion object {
+    companion object {
+        fun available(context: Context): Boolean =
+            WakeWordModel.available(context) || VoskWakeListener.available(context)
+
         // openWakeWord's default is 0.5; real voices on this phone scored 0.52-0.63 when heard.
         const val THRESHOLD = 0.4f
         // Below this the model hears nothing like the phrase; the voice check isn't tried.
