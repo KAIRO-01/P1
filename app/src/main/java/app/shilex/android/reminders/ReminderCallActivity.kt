@@ -3,6 +3,8 @@ package app.shilex.android.reminders
 import android.Manifest
 import android.app.KeyguardManager
 import android.content.pm.PackageManager
+import android.net.ConnectivityManager
+import android.net.NetworkCapabilities
 import android.app.NotificationManager
 import android.content.Intent
 import android.media.AudioAttributes
@@ -161,7 +163,12 @@ class ReminderCallActivity : ComponentActivity() {
 
         val session = VoiceSession.get(applicationContext)
         val micAllowed = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
-        if (session.state.value.hasKey && micAllowed) {
+        val online = runCatching {
+            val cm = getSystemService(ConnectivityManager::class.java)
+            val caps = cm.getNetworkCapabilities(cm.activeNetwork)
+            caps?.hasCapability(NetworkCapabilities.NET_CAPABILITY_VALIDATED) == true
+        }.getOrDefault(false)
+        if (session.state.value.hasKey && micAllowed && online) {
             if (session.active) session.stop("switching to reminder call")
             usingAi = true
             sessionStartedHere = true
@@ -191,8 +198,8 @@ class ReminderCallActivity : ComponentActivity() {
             return
         }
 
-        // Offline fallback preserves the original Answer-to-speak functionality if
-        // the Gemini key, network or microphone is not available.
+        // Offline fallback preserves Answer-to-speak even when mobile data is off.
+        // Two-way Gemini voice needs a usable network, a valid key, and microphone access.
         status = "Offline reminder (two-way AI needs Gemini key and microphone access)"
         tts = TextToSpeech(applicationContext) { result ->
             main.post {
