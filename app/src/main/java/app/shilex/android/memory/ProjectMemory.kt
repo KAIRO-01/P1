@@ -98,8 +98,8 @@ class ProjectMemory(context: Context) : SQLiteOpenHelper(context.applicationCont
         }
         entries.forEach { p ->
             val title = p.getString("project")
-            val history = (p.optJSONArray("history") ?: JSONArray())
-            val old = (0 until history.length()).map { history.optString(it) }.filter { it.isNotBlank() }
+            val historyArray = p.optJSONArray("history") ?: JSONArray()
+            val old = (0 until historyArray.length()).map { historyArray.optString(it) }.filter { it.isNotBlank() }
             val already = history(title, 2000).toSet()
             val restore = JSONObject(p.toString()).put("note", "Restored from user-approved backup")
             save(restore)
