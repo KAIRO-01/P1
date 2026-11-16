@@ -72,6 +72,9 @@ object FloatingOrb {
             val session = VoiceSession.get(context)
             val state by session.state.collectAsStateWithLifecycle()
             val level by session.level.collectAsStateWithLifecycle()
+            val local = LocalTurn.get(context)
+            val localState by local.phase.collectAsStateWithLifecycle()
+            val localLevel by local.level.collectAsStateWithLifecycle()
             ShilexTheme {
                 Box(
                     Modifier
