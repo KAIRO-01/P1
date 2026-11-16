@@ -31,6 +31,13 @@ class Reminders(private val context: Context) {
         return reminder
     }
 
+    /** Trigger a one-off local sample alert without needing Gemini or scheduling an alarm. */
+    fun testCall() {
+        val sample = Reminder(System.currentTimeMillis(), "This is your KAIRO test reminder.", LocalDateTime.now())
+        save(all() + sample)
+        fire(sample.id)
+    }
+
     fun cancel(reminder: Reminder) {
         alarms.cancel(pending(reminder.id))
         save(all().filterNot { it.id == reminder.id })
