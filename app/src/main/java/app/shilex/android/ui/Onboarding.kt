@@ -65,7 +65,7 @@ fun Onboarding(assistant: AssistantViewModel, hasKey: Boolean, onFinished: () ->
                         }
                         Primary("Get started", next)
                     }
-                    Step.Key -> Page("Your Gemini key", "${Branding.ASSISTANT_NAME} uses Google Gemini, with your own key, for anything the phone can't do by itself.") {
+                    Step.Key -> Page("Your Gemini free-tier key", "${Branding.ASSISTANT_NAME} can use Google's free Gemini API quota. Use ONLY a key from an unbilled Google AI Studio project. This app cannot inspect your billing status: keys linked to a paid project may incur charges.") {
                         if (hasKey) {
                             Text("Your key is saved and checked.", color = Accent, style = MaterialTheme.typography.titleMedium)
                             Spacer(Modifier.height(16.dp))
