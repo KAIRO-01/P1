@@ -18,6 +18,13 @@ import androidx.compose.ui.Modifier
 import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.unit.dp
 import androidx.compose.material3.TextButton
+import androidx.compose.material3.Button
+import androidx.compose.material3.OutlinedButton
+import android.Manifest
+import android.os.Build
+import android.content.pm.PackageManager
+import androidx.core.content.ContextCompat
+import app.shilex.android.reminders.Reminders
 import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
@@ -78,6 +85,7 @@ fun AutomationsScreen() {
             )
         }
         Routines()
+        ReminderPreview()
         Group("On this phone", "Works without internet and doesn't use your Gemini key.", Accent, "Local", LOCAL)
         Group("Tasks with your OK", "Gemini plans them; you finish anything that sends, calls or pays.", Warning, "Needs you", TASKS)
         Group("With Gemini", "Needs internet; uses your Gemini key.", Warning, "Gemini", CLOUD)
@@ -124,5 +132,38 @@ private fun Group(title: String, detail: String, color: Color, badge: String, co
         }
         Text(detail, style = MaterialTheme.typography.bodySmall, color = Muted, modifier = Modifier.padding(top = 2.dp, bottom = 6.dp))
         commands.forEach { InfoRow(it.title, it.examples) }
+    }
+}
+
+/** One-tap, offline end-to-end test of the Answer-to-speak call reminder. */
+@Composable
+private fun ReminderPreview() {
+    val context = LocalContext.current
+    val reminders = remember(context) { Reminders(context) }
+    var note by remember { mutableStateOf("") }
+    Section(null) {
+        Column(Modifier.padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
+            Text("KAIRO reminder calls", style = MaterialTheme.typography.titleLarge)
+            Text(
+                "Free and offline. KAIRO rings like a call; only after you tap Answer does it speak the reminder. No SIM call, account or Gemini API needed.",
+                style = MaterialTheme.typography.bodySmall,
+                color = Muted,
+            )
+            Button(onClick = {
+                val permitted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
+                if (!permitted) {
+                    note = "Allow KAIRO notifications in Android Settings, then try again."
+                } else {
+                    reminders.testCall()
+                    note = "Test reminder triggered. Tap Answer on the call alert to hear the offline voice."
+                }
+            }) { Text("Test reminder call") }
+            if (!reminders.exact()) {
+                Text("For accurate scheduled reminders, allow Alarms & reminders access in Android Settings.",
+                    style = MaterialTheme.typography.bodySmall, color = Muted)
+            }
+            if (note.isNotEmpty()) Text(note, style = MaterialTheme.typography.bodySmall)
+        }
     }
 }
