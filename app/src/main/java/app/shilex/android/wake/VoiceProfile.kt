@@ -14,6 +14,7 @@ import kotlin.math.sqrt
 class VoiceProfile(val templates: List<FloatArray>, val threshold: Float) {
     /** Best match (cosine, -1..1) of a live feature window against the samples. */
     fun similarity(window: FloatArray): Float {
+        if (templates.isEmpty() || window.isEmpty() || templates.any { it.size != window.size }) return -1f
         val v = VoiceMath.unit(window)
         return templates.maxOf { VoiceMath.dot(it, v) }
     }
@@ -33,6 +34,7 @@ class VoiceProfile(val templates: List<FloatArray>, val threshold: Float) {
                 val threshold = input.readFloat()
                 val count = input.readInt()
                 val size = input.readInt()
+                require(count in 1..SAMPLES && size in 1..10_000)
                 VoiceProfile(List(count) { FloatArray(size) { input.readFloat() } }, threshold)
             }
         }.getOrNull()
