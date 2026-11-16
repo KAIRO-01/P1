@@ -28,7 +28,7 @@ class CallRetryManager(private val context: Context) {
     }
 
     fun stopAll() {
-        prefs.all.keys.mapNotNull(String::toLongOrNull).forEach(::stop)
+        prefs.all.keys.mapNotNull(String::toLongOrNull).forEach { Reminders(context).stopCalling(it) }
     }
 
     fun retry(id: Long) {
