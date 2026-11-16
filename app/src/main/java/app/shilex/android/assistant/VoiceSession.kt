@@ -42,6 +42,9 @@ data class UiState(
     val hasKey: Boolean,
     val phase: Phase = Phase.Off,
     val lines: List<Line> = emptyList(),
+    val webSources: List<LiveEvent.WebSource> = emptyList(),
+    val searchQueries: List<String> = emptyList(),
+    val searchSuggestionsHtml: String = "",
     val problem: String? = null,
     /** A permission a tool needs; the screen asks for it, then calls permissionAnswered. */
     val permissionNeeded: String? = null,
@@ -294,7 +297,19 @@ class VoiceSession private constructor(private val app: Application) : LiveClien
                 }
                 heardUser = true
                 tools.userSpoke(event.text)
-                _state.update { it.copy(lines = transcript.add(fromUser = true, event.text)) }
+                _state.update { it.copy(
+                    lines = transcript.add(fromUser = true, event.text),
+                    webSources = emptyList(), searchQueries = emptyList(), searchSuggestionsHtml = "",
+                ) }
+            }
+            is LiveEvent.Grounding -> {
+                _state.update {
+                    it.copy(
+                        webSources = (it.webSources + event.sources).distinctBy { source -> source.url }.take(6),
+                        searchQueries = (it.searchQueries + event.queries).distinct().take(6),
+                        searchSuggestionsHtml = event.searchSuggestionsHtml.ifBlank { it.searchSuggestionsHtml },
+                    )
+                }
             }
             is LiveEvent.AssistantText -> if (!droppingReply) {
                 lastActivity = SystemClock.elapsedRealtime()
