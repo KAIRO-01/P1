@@ -10,7 +10,7 @@ import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.withContext
 
 /**
- * Records one "Hey Jarvis" sample for the voice profile. The audio stays in memory only
+ * Records one "Hey Kairo" sample for the voice profile. The audio stays in memory only
  * long enough to turn it into speech features; it is never saved or sent.
  */
 object VoiceSetup {
@@ -28,44 +28,61 @@ object VoiceSetup {
     /** Callers check RECORD_AUDIO and pause the wake listener first. [speakNow] runs after the lead-in. */
     @SuppressLint("MissingPermission")
     suspend fun record(context: Context, speakNow: () -> Unit): Sample = withContext(Dispatchers.IO) {
-        val total = (RATE * TOTAL_MS / 1000).toInt()
-        val minBuffer = AudioRecord.getMinBufferSize(RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT)
-        val record = AudioRecord(
-            MediaRecorder.AudioSource.VOICE_RECOGNITION, // same mic as the wake listener
-            RATE,
-            AudioFormat.CHANNEL_IN_MONO,
-            AudioFormat.ENCODING_PCM_16BIT,
-            maxOf(minBuffer, total * 2),
-        )
-        if (record.state != AudioRecord.STATE_INITIALIZED) {
-            record.release()
-            return@withContext Sample.Problem("The microphone is busy. Close other apps using it and try again.")
-        }
-        val audio = ShortArray(total)
-        val lead = (RATE * LEAD_MS / 1000).toInt()
-        var filled = 0
-        var told = false
-        record.startRecording()
+        // The APK ships with the Vosk fallback, but may not include the separately trained
+        // ONNX wake-word model. Enrol with local acoustic features in that case.
         try {
-            while (filled < total) {
-                val read = record.read(audio, filled, minOf(1600, total - filled))
-                if (read <= 0) break
-                filled += read
-                if (!told && filled >= lead) {
-                    told = true
-                    withContext(Dispatchers.Main) { speakNow() }
-                }
+            val total = (RATE * TOTAL_MS / 1000).toInt()
+            val minBuffer = AudioRecord.getMinBufferSize(
+                RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT,
+            )
+            if (minBuffer <= 0) {
+                return@withContext Sample.Problem("The phone does not support this microphone mode.")
             }
-        } finally {
-            record.stop()
-            record.release()
+            val record = AudioRecord(
+                MediaRecorder.AudioSource.VOICE_RECOGNITION,
+                RATE, AudioFormat.CHANNEL_IN_MONO, AudioFormat.ENCODING_PCM_16BIT,
+                maxOf(minBuffer, total * 2),
+            )
+            if (record.state != AudioRecord.STATE_INITIALIZED) {
+                record.release()
+                return@withContext Sample.Problem("The microphone is busy. Close other apps using it and try again.")
+            }
+            val audio = ShortArray(total)
+            val lead = (RATE * LEAD_MS / 1000).toInt()
+            var filled = 0
+            var told = false
+            try {
+                record.startRecording()
+                while (filled < total) {
+                    val read = record.read(audio, filled, minOf(1600, total - filled))
+                    if (read <= 0) break
+                    filled += read
+                    if (!told && filled >= lead) {
+                        told = true
+                        withContext(Dispatchers.Main) { speakNow() }
+                    }
+                }
+            } finally {
+                runCatching { record.stop() }
+                record.release()
+            }
+            if (filled < total * 8 / 10 || !heardSpeech(audio, lead)) {
+                return@withContext Sample.Problem("I didn't hear a clear Hey Kairo. Try again closer to the phone.")
+            }
+            val best = if (WakeWordModel.available(context)) {
+                WakeWordModel(context).use { it.bestWindow(audio) }
+            } else {
+                // Fallback training: use a weak acoustic signature to filter the offline
+                // recognizer, not a promise of biometric speaker authentication.
+                SpeakerFingerprint.extract(audio, lead)?.let { it to 1.0f }
+            } ?: return@withContext Sample.Problem("The voice wasn't clear enough. Please record again.")
+            Sample.Ok(best.first, best.second)
+        } catch (e: kotlinx.coroutines.CancellationException) {
+            throw e
+        } catch (e: Exception) {
+            Diag.w("voice setup failed (${e.javaClass.simpleName})")
+            Sample.Problem("Couldn't record your voice. Check microphone permission and try again.")
         }
-        if (!heardSpeech(audio, lead)) {
-            return@withContext Sample.Problem("I didn't hear you. Say it a little louder, closer to the phone.")
-        }
-        val best = WakeWordModel(context).use { it.bestWindow(audio) }
-            ?: return@withContext Sample.Problem("That didn't work. Try again.")
-        Sample.Ok(best.first, best.second)
     }
 
     /**
