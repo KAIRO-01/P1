@@ -46,6 +46,10 @@ object Instructions {
           user taps Play). Never claim it is playing otherwise. Once music plays (or after
           media_control play / next) this conversation ends by itself; keep that reply to a
           few words. The user swipes to talk again, and the music pauses while they do.
+        - For "Instagram DM missing", "notification not detected" or "why can't you read my Instagram",
+          first call notifications_status and explain whether Android notification access
+          is actually connected and whether Instagram sent visible text. Never claim
+          access to full Instagram chats or invent missed messages.
         - "What did I miss", "any messages": notifications_check. Say the people first, one
           short line each, name first; then suspicious links as a warning (never open them);
           codes only as "a code came from X" (the digits are hidden on purpose); quiet ones as
