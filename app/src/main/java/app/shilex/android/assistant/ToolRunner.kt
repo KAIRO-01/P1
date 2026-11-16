@@ -35,6 +35,8 @@ import app.shilex.android.tools.MediaTools
 import app.shilex.android.tools.MemoryTools
 import app.shilex.android.tools.NotifyTools
 import app.shilex.android.tools.ProjectTools
+import app.shilex.android.tools.WorkTools
+import app.shilex.android.memory.WorkApproval
 import app.shilex.android.memory.ProjectApproval
 import app.shilex.android.tools.ReminderTools
 import app.shilex.android.tools.Results
@@ -74,7 +76,7 @@ class ToolRunner(
     private val endSoon: () -> Unit,
 ) : ToolHost {
     private val tools = (
-        CommsTools.all() + ClockTools.all() + ReminderTools.all() + ProjectTools.all() + MediaTools.all() + InfoTools.all() +
+        CommsTools.all() + ClockTools.all() + ReminderTools.all() + ProjectTools.all() + WorkTools.all() + MediaTools.all() + InfoTools.all() +
             ScreenTools.all() + AppTools.all() + BookingTools.all() + DeviceTools.all() + NotifyTools.all() + CalendarTools.all() + MailTools.all() + MemoryTools.all()
         ).associateBy { it.name }
 
@@ -146,7 +148,14 @@ class ToolRunner(
     fun userSpoke(text: String = "") {
         trust.userSpoke()
         Replies.heard(text)
-        ProjectApproval.userSpoke(text)
+        val result = WorkApproval.spoken(context, text) ?: ProjectApproval.onAnswer(context, text)
+        if (result != null) {
+            // These messages come from the actual microphone/typed user turn; Gemini
+            // cannot authorize a memory write merely by calling its own tool.
+            note("Local memory update: " + result)
+        } else {
+            ProjectApproval.userSpoke(text)
+        }
     }
 
     /** JARVIS's own Allow card, which only a finger can press. No card (control off): not allowed. */
