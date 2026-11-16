@@ -48,6 +48,7 @@ fun ShilexApp(assistant: AssistantViewModel) {
     val activity by assistant.activity.collectAsStateWithLifecycle()
     val wakeWord by assistant.wakeWord.collectAsStateWithLifecycle()
     val level by assistant.level.collectAsStateWithLifecycle()
+    val localLevel by assistant.localLevel.collectAsStateWithLifecycle()
     val task by assistant.task.collectAsStateWithLifecycle()
     var onboarded by rememberSaveable { mutableStateOf(assistant.onboarded) }
     var tab by rememberSaveable { mutableIntStateOf(0) }
