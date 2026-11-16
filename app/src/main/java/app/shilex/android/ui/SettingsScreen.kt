@@ -62,6 +62,19 @@ fun SettingsScreen(assistant: AssistantViewModel) {
         Text("Settings", style = MaterialTheme.typography.headlineSmall, modifier = Modifier.padding(top = 12.dp))
 
         Section("Gemini") {
+            val liveSettings = remember { AppSettings(context) }
+            var liveWebOn by remember { mutableStateOf(liveSettings.liveWebSearch) }
+            SwitchRow(
+                "Live Internet Search (Google)",
+                "Research current rates, products, news and latest facts inside KAIRO voice. " +
+                    "Uses your Gemini Google Search quota and MAY COST MONEY if your Google API project has billing enabled. " +
+                    "KAIRO cannot inspect your API billing. Turn on only if you accept the charges. " +
+                    "Restart your voice session after changing this.",
+                liveWebOn,
+            ) {
+                liveWebOn = it
+                liveSettings.liveWebSearch = it
+            }
             InfoRow("API key", "Your own key, encrypted with Android Keystore on this phone. Used only for requests the phone can't handle. Gemini usage counts against your key's limits.") {
                 TextButton(onClick = assistant::forgetKey) { Text("Replace") }
             }
