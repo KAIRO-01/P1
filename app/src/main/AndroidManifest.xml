@@ -107,6 +107,9 @@
             android:name=".reminders.Reminders$ReminderActionReceiver"
             android:exported="false" />
         <receiver
+            android:name=".reminders.DailyReview$DailyReviewReceiver"
+            android:exported="false" />
+        <receiver
             android:name=".reminders.Reminders$BootReceiver"
             android:exported="false">
             <intent-filter>
