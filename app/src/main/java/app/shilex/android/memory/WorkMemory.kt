@@ -81,13 +81,15 @@ class WorkMemory(private val context: Context) :
             for (i in 0 until list.length()) {
                 val job = list.getJSONObject(i)
                 val worker = job.optString("worker").trim().take(80)
-                val order = job.optString("order").trim().take(120).ifBlank { "General work" }
+                val proposedOrder = job.optString("order").trim().take(120)
                 val work = job.optString("task").trim().take(280)
                 require(worker.isNotBlank() && work.isNotBlank()) { "Worker and task required" }
                 val taskId = job.optLong("task_id", 0L)
                 val old = if (taskId > 0) before.firstOrNull { it.id == taskId }
                     ?: error("Task " + taskId + " not found")
-                    else byKey[(order + "|" + work).lowercase()]
+                    else byKey[(proposedOrder.ifBlank { "General work" } + "|" + work).lowercase()]
+                // Editing an existing job must preserve its original customer/order link.
+                val order = proposedOrder.ifBlank { old?.order ?: "General work" }
                 val due = job.optString("due").trim().ifBlank { old?.due.orEmpty() }
                 if (due.isNotBlank()) LocalDate.parse(due)
                 val status = job.optString("status").trim().take(40).ifBlank { old?.status ?: "Pending" }
