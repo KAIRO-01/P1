@@ -21,8 +21,13 @@ import androidx.compose.material3.TextButton
 import androidx.compose.material3.Button
 import androidx.compose.material3.OutlinedButton
 import android.Manifest
-import android.os.Build
+import android.content.Intent
 import android.content.pm.PackageManager
+import android.os.Build
+import android.provider.Settings as AndroidSettings
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.app.NotificationManagerCompat
 import androidx.core.content.ContextCompat
 import app.shilex.android.reminders.Reminders
 import androidx.compose.runtime.getValue
@@ -141,6 +146,24 @@ private fun ReminderPreview() {
     val context = LocalContext.current
     val reminders = remember(context) { Reminders(context) }
     var note by remember { mutableStateOf("") }
+
+    fun testIfAllowed() {
+        val manager = NotificationManagerCompat.from(context)
+        if (!manager.areNotificationsEnabled()) {
+            note = "KAIRO app notifications are switched off. Open KAIRO notification settings below."
+            return
+        }
+        reminders.testCall()
+        note = "Test reminder triggered. If the call screen does not open, check the KAIRO Calling notification and tap Answer."
+    }
+
+    val requestNotifications = rememberLauncherForActivityResult(
+        ActivityResultContracts.RequestPermission(),
+    ) { granted ->
+        if (granted) testIfAllowed()
+        else note = "Allow KAIRO app notifications (not Device & app notification access). Open settings below."
+    }
+
     Section(null) {
         Column(Modifier.padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(10.dp)) {
             Text("KAIRO reminder calls", style = MaterialTheme.typography.titleLarge)
@@ -153,15 +176,28 @@ private fun ReminderPreview() {
                 val permitted = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
                     ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) == PackageManager.PERMISSION_GRANTED
                 if (!permitted) {
-                    note = "Allow KAIRO notifications in Android Settings, then try again."
+                    // Ask Android directly. Device & app notification access is a separate permission.
+                    requestNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
                 } else {
-                    reminders.testCall()
-                    note = "Test reminder triggered. Tap Answer on the call alert to hear the offline voice."
+                    testIfAllowed()
                 }
             }) { Text("Test reminder call") }
+            OutlinedButton(onClick = {
+                // Some manufacturers hide the runtime permission prompt after a denial.
+                // This opens the actual app notification page, not notification-listener access.
+                val intent = Intent(AndroidSettings.ACTION_APP_NOTIFICATION_SETTINGS)
+                    .putExtra(AndroidSettings.EXTRA_APP_PACKAGE, context.packageName)
+                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                runCatching { context.startActivity(intent) }.onFailure {
+                    note = "Open Android Settings > Apps > KAIRO > Notifications, then allow notifications."
+                }
+            }) { Text("Open KAIRO notification settings") }
             if (!reminders.exact()) {
-                Text("For accurate scheduled reminders, allow Alarms & reminders access in Android Settings.",
-                    style = MaterialTheme.typography.bodySmall, color = Muted)
+                Text(
+                    "For accurate scheduled reminders, allow Alarms & reminders access in Android Settings.",
+                    style = MaterialTheme.typography.bodySmall,
+                    color = Muted,
+                )
             }
             if (note.isNotEmpty()) Text(note, style = MaterialTheme.typography.bodySmall)
         }
