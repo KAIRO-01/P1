@@ -50,6 +50,8 @@ class LocalTurn private constructor(private val context: Context) {
 
     private val _phase = MutableStateFlow(LocalPhase.Idle)
     val phase: StateFlow<LocalPhase> = _phase.asStateFlow()
+    private val _level = MutableStateFlow(0f)
+    val level: StateFlow<Float> = _level.asStateFlow()
 
     /** A Home-screen quick action: runs [command] at once, without speech. */
     fun runNow(command: LocalCommand): String {
@@ -74,6 +76,7 @@ class LocalTurn private constructor(private val context: Context) {
         val kind = recogniser() ?: return false.also { Diag.i("local: no allowed speech recogniser, using Gemini") }
         active = true
         _phase.value = LocalPhase.Listening
+        _level.value = 0f
         VoiceService.start(context) // stops the wake listener so the recogniser gets the mic
         musicPause.pause()
         warmUpVoice()
@@ -84,7 +87,7 @@ class LocalTurn private constructor(private val context: Context) {
     private fun listen(kind: String) {
         if (kind == "offline") {
             Diag.i("local: listening (offline speech)")
-            offline.listen { texts ->
+            offline.listen(onLevel = { value -> _level.value = value }) { texts ->
                 heardAt = SystemClock.elapsedRealtime()
                 if (texts.isEmpty()) {
                     Diag.i("local: heard nothing")
@@ -136,7 +139,10 @@ class LocalTurn private constructor(private val context: Context) {
 
         override fun onReadyForSpeech(params: Bundle?) { Diag.i("local: ready") }
         override fun onBeginningOfSpeech() { Diag.i("local: speech started") }
-        override fun onRmsChanged(rmsdB: Float) = Unit
+        override fun onRmsChanged(rmsdB: Float) {
+            // Android's speech recognizer reports microphone loudness roughly in dB.
+            _level.value = (rmsdB / 13f).coerceIn(0f, 1f)
+        }
         override fun onBufferReceived(buffer: ByteArray?) = Unit
         override fun onEndOfSpeech() = Unit
         override fun onPartialResults(partialResults: Bundle?) = Unit
@@ -147,6 +153,7 @@ class LocalTurn private constructor(private val context: Context) {
         // Phrases learned from earlier Gemini fallbacks run locally too.
         val command = LocalRouter.match(texts) ?: habits()?.lookup(texts)
         _phase.value = LocalPhase.Doing
+        _level.value = 0f
         if (command == null) {
             Diag.i("local: no local match, asking Gemini")
             handOff(texts.firstOrNull())
@@ -173,6 +180,7 @@ class LocalTurn private constructor(private val context: Context) {
         text?.let { habits()?.expect(it) }
         active = false
         _phase.value = LocalPhase.Idle
+        _level.value = 0f
         musicPause.resume()
         VoiceSession.get(context).start(firstText = text)
     }
@@ -184,6 +192,7 @@ class LocalTurn private constructor(private val context: Context) {
     private fun finish() {
         active = false
         _phase.value = LocalPhase.Idle
+        _level.value = 0f
         musicPause.resume()
         VoiceService.stop(context) // back to the wake listener
         main.postDelayed(::shutDownVoice, SHUTDOWN, VOICE_IDLE_MS)
@@ -204,7 +213,23 @@ class LocalTurn private constructor(private val context: Context) {
                 AudioAttributes.Builder().setUsage(AudioAttributes.USAGE_ASSISTANT).setContentType(AudioAttributes.CONTENT_TYPE_SPEECH).build(),
             )
             tts?.setOnUtteranceProgressListener(object : UtteranceProgressListener() {
-                override fun onStart(utteranceId: String?) = Unit
+                override fun onStart(utteranceId: String?) { _level.value = 0.12f }
+                override fun onAudioAvailable(utteranceId: String?, audio: ByteArray?) {
+                    // Not every TTS engine supplies PCM callbacks; when available the
+                    // speaking orb follows the actual locally synthesized speech too.
+                    if (audio.isNullOrEmpty()) return
+                    var sum = 0.0
+                    var i = 0
+                    while (i + 1 < audio.size) {
+                        val sample = ((audio[i + 1].toInt() shl 8) or (audio[i].toInt() and 0xFF)).toShort().toDouble()
+                        sum += sample * sample
+                        i += 2
+                    }
+                    if (i > 0) {
+                        val rms = kotlin.math.sqrt(sum / (i / 2))
+                        _level.value = kotlin.math.sqrt((rms / 3_000.0).coerceIn(0.0, 1.0)).toFloat()
+                    }
+                }
                 override fun onDone(utteranceId: String?) { main.post(::finish) }
                 @Deprecated("Deprecated in Java")
                 override fun onError(utteranceId: String?) { main.post(::finish) }
@@ -220,6 +245,7 @@ class LocalTurn private constructor(private val context: Context) {
             return
         }
         _phase.value = LocalPhase.Speaking
+        _level.value = 0.12f
         voice.speak(reply, TextToSpeech.QUEUE_FLUSH, null, "reply")
     }
 
