@@ -84,7 +84,8 @@ object WorkTools {
             return if (tasks.isEmpty()) Results.done("No approved worker tasks found. Ask user to describe and approve a new assignment.")
                 else Results.done(tasks.joinToString("\n") { t ->
                     "Task #"+t.id + ": "+t.worker + " — " + t.work + "; order " + t.order +
-                        "; due " + t.due.ifBlank { "unknown" } + "; status " + t.status + "; note " + t.note
+                        "; due " + t.due.ifBlank { "unknown" } + "; status " + t.status + "; note " + t.note +
+                        "; updates: " + db.historyFor(t.id).take(3).joinToString(" | ")
                 }.take(5500))
         }
     }
