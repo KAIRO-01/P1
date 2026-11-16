@@ -103,7 +103,11 @@ class WakeListener(private val context: Context, private val onWake: () -> Unit)
         val voice = profile?.takeIf { score >= VOICE_GATE }?.let { it to it.similarity(detector.window()) }
         val matched = voice != null && voice.second >= voice.first.threshold
         val note = if (music) ", music" else ""
-        if ((score >= THRESHOLD || matched) && now - lastWake > COOLDOWN_MS) {
+        // An enrolled profile must match: a high phrase score alone is not enough.
+        // Otherwise a different speaker could bypass the user's voice enrollment.
+        val accepted = if (profile == null) score >= THRESHOLD
+            else score >= VOICE_GATE && matched
+        if (accepted && now - lastWake > COOLDOWN_MS) {
             lastWake = now
             Diag.i("wake: heard (score %.2f, voice %s%s)".format(score, voice?.second?.let { "%.3f".format(it) } ?: "-", note))
             main.post(onWake)
