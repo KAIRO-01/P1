@@ -3,6 +3,7 @@ package app.shilex.android.notify
 import android.app.Notification
 import android.content.ComponentName
 import android.content.Context
+import android.os.Bundle
 import android.provider.Settings
 import android.service.notification.NotificationListenerService
 import android.service.notification.StatusBarNotification
@@ -16,8 +17,20 @@ import app.shilex.android.Diag
  */
 class NotificationWatch : NotificationListenerService() {
     override fun onListenerConnected() {
-        Diag.i("notifications: access on")
+        connected = true
+        Diag.i("notifications: listener connected")
         runCatching { activeNotifications?.forEach(::keep) }
+    }
+
+    override fun onListenerDisconnected() {
+        connected = false
+        Diag.w("notifications: listener disconnected")
+        runCatching { requestRebind(ComponentName(this, NotificationWatch::class.java)) }
+    }
+
+    override fun onDestroy() {
+        connected = false
+        super.onDestroy()
     }
 
     override fun onNotificationPosted(sbn: StatusBarNotification) {
@@ -34,20 +47,38 @@ class NotificationWatch : NotificationListenerService() {
         }.getOrDefault(sbn.packageName)
         val group = extras.getBoolean(NotificationCompat.EXTRA_IS_GROUP_CONVERSATION) ||
             extras.getCharSequence(NotificationCompat.EXTRA_CONVERSATION_TITLE) != null
+        // Different social apps use MessagingStyle, expanded text, or multi-line extras.
+        // Read only content that Android actually exposed through the notification.
+        val messages = runCatching {
+            extras.getParcelableArray(Notification.EXTRA_MESSAGES).orEmpty().mapNotNull {
+                (it as? Bundle)?.getCharSequence("text")?.toString()?.trim()?.takeIf(String::isNotEmpty)
+            }
+        }.getOrDefault(emptyList())
+        val lines = extras.getCharSequenceArray(Notification.EXTRA_TEXT_LINES).orEmpty()
+            .map { it.toString().trim() }.filter { it.isNotBlank() }
+        val mainText = (extras.getCharSequence(Notification.EXTRA_BIG_TEXT)
+            ?: extras.getCharSequence(Notification.EXTRA_TEXT))?.toString().orEmpty()
+        val extracted = when {
+            messages.isNotEmpty() -> messages.takeLast(3).joinToString(" | ")
+            mainText.isNotBlank() -> mainText
+            lines.isNotEmpty() -> lines.takeLast(3).joinToString(" | ")
+            else -> ""
+        }
         val seen = Seen(
             packageName = sbn.packageName,
             app = label,
             title = extras.getCharSequence(Notification.EXTRA_TITLE)?.toString().orEmpty(),
-            text = (extras.getCharSequence(Notification.EXTRA_BIG_TEXT) ?: extras.getCharSequence(Notification.EXTRA_TEXT))?.toString().orEmpty(),
+            text = extracted.take(850),
             atMillis = sbn.postTime,
             group = group,
             category = n.category.orEmpty(),
+            notificationKey = sbn.key,
         ).let { s ->
             // Only people's own chats can be answered hands-free, never groups.
             if (group) s else s.copy(replyId = Replies.register(sbn.key, s.title.ifBlank { label }, label, sbn.packageName, n, sbn.postTime))
         }
         synchronized(recent) {
-            recent.removeAll { it.atMillis < System.currentTimeMillis() - KEEP_MS }
+            recent.removeAll { it.atMillis < System.currentTimeMillis() - KEEP_MS || it.notificationKey == sbn.key }
             recent.add(seen)
             while (recent.size > MAX_KEPT) recent.removeAt(0)
         }
@@ -55,6 +86,8 @@ class NotificationWatch : NotificationListenerService() {
     }
 
     companion object {
+        @Volatile var connected: Boolean = false
+            private set
         private val recent = mutableListOf<Seen>()
         private const val MAX_KEPT = 60
         private const val KEEP_MS = 12 * 60 * 60 * 1000L
