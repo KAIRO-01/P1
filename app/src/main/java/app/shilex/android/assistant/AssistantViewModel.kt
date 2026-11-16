@@ -30,6 +30,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
     private val local = LocalTurn.get(app)
 
     val localPhase: StateFlow<LocalPhase> = local.phase
+    val localLevel: StateFlow<Float> = local.level
 
     private val _wakeWord = MutableStateFlow(settings.wakeWord)
 
