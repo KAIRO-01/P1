@@ -32,8 +32,10 @@ class Reminders(private val context: Context) {
     }
 
     /** Trigger a one-off local sample alert without needing Gemini or scheduling an alarm. */
-    fun testCall() {
-        val sample = Reminder(System.currentTimeMillis(), "This is your KAIRO test reminder.", LocalDateTime.now())
+    fun testCall() = callNow("This is your KAIRO test reminder. You can ask follow-up questions after Answer.")
+
+    fun callNow(text: String) {
+        val sample = Reminder(System.currentTimeMillis(), text.take(600), LocalDateTime.now())
         save(all() + sample)
         fire(sample.id)
     }
@@ -154,7 +156,10 @@ class Reminders(private val context: Context) {
 
     class BootReceiver : BroadcastReceiver() {
         override fun onReceive(context: Context, intent: Intent) {
-            if (intent.action == Intent.ACTION_BOOT_COMPLETED) Reminders(context).rescheduleAll()
+            if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
+                Reminders(context).rescheduleAll()
+                DailyReview(context).scheduleNext()
+            }
         }
     }
 }
