@@ -3,6 +3,8 @@ package app.shilex.android.reminders
 import android.app.NotificationManager
 import android.content.Intent
 import android.media.AudioAttributes
+import android.media.Ringtone
+import android.media.RingtoneManager
 import android.os.Bundle
 import android.os.Handler
 import android.os.Looper
@@ -52,6 +54,17 @@ class ReminderCallActivity : ComponentActivity() {
     private var answered by mutableStateOf(false)
     private var status by mutableStateOf("Incoming reminder")
     private var tts: TextToSpeech? = null
+    private var ringtone: Ringtone? = null
+    private val startRing = Runnable {
+        if (answered || isFinishing || isDestroyed) return@Runnable
+        runCatching {
+            val uri = RingtoneManager.getDefaultUri(RingtoneManager.TYPE_RINGTONE)
+            ringtone = RingtoneManager.getRingtone(this, uri)?.apply {
+                isLooping = true
+                play()
+            }
+        }
+    }
 
     override fun onCreate(savedInstanceState: Bundle?) {
         super.onCreate(savedInstanceState)
@@ -75,6 +88,7 @@ class ReminderCallActivity : ComponentActivity() {
             }
         }
         if (intent.getBooleanExtra(EXTRA_AUTO_ANSWER, false)) answer()
+        else main.postDelayed(startRing, 1_200L)
     }
 
     override fun onNewIntent(intent: Intent) {
@@ -82,12 +96,14 @@ class ReminderCallActivity : ComponentActivity() {
         setIntent(intent)
         acceptIntent(intent)
         if (intent.getBooleanExtra(EXTRA_AUTO_ANSWER, false)) answer()
+        else main.postDelayed(startRing, 1_200L)
     }
 
     private fun acceptIntent(intent: Intent) {
         val newId = intent.getLongExtra(EXTRA_ID, -1)
         val newText = intent.getStringExtra(EXTRA_TEXT).orEmpty()
         if (newId != reminderId && newId != -1L) {
+            stopRinging()
             tts?.stop()
             tts?.shutdown()
             tts = null
@@ -101,6 +117,7 @@ class ReminderCallActivity : ComponentActivity() {
     private fun answer() {
         if (answered || reminderText.isBlank()) return
         answered = true
+        stopRinging()
         status = "Preparing offline voice..."
         cancelNotification()
         // TTS is created ONLY after Answer; background ringing never sends text or audio
@@ -159,9 +176,16 @@ class ReminderCallActivity : ComponentActivity() {
     }
 
     private fun dismiss() {
+        stopRinging()
         cancelNotification()
         tts?.stop()
         finish()
+    }
+
+    private fun stopRinging() {
+        main.removeCallbacks(startRing)
+        runCatching { ringtone?.stop() }
+        ringtone = null
     }
 
     private fun cancelNotification() {
@@ -171,6 +195,7 @@ class ReminderCallActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        stopRinging()
         tts?.stop()
         tts?.shutdown()
         tts = null
