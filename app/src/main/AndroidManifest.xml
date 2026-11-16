@@ -11,6 +11,9 @@
     <uses-permission android:name="com.android.alarm.permission.SET_ALARM" />
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS" />
     <uses-permission android:name="android.permission.SCHEDULE_EXACT_ALARM" />
+    <!-- Android may allow call-style full-screen alerts only for alarms/calls. User
+         can review this permission in KAIRO settings on Android 14+. -->
+    <uses-permission android:name="android.permission.USE_FULL_SCREEN_INTENT" />
     <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
     <!-- Background listening: a foreground service with a visible notification. -->
     <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
@@ -63,6 +66,14 @@
                 <category android:name="android.intent.category.DEFAULT" />
             </intent-filter>
         </activity>
+        <!-- Local reminder screen: never sends a phone call or uses Gemini. -->
+        <activity
+            android:name=".reminders.ReminderCallActivity"
+            android:exported="false"
+            android:launchMode="singleTop"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true"
+            android:excludeFromRecents="true" />
         <service
             android:name=".control.ControlService"
             android:exported="false"
@@ -91,6 +102,9 @@
             android:foregroundServiceType="microphone" />
         <receiver
             android:name=".reminders.Reminders$ReminderReceiver"
+            android:exported="false" />
+        <receiver
+            android:name=".reminders.Reminders$ReminderActionReceiver"
             android:exported="false" />
         <receiver
             android:name=".reminders.Reminders$BootReceiver"
