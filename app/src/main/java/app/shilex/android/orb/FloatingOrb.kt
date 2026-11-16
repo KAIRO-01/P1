@@ -24,6 +24,8 @@ import app.shilex.android.MainActivity
 import app.shilex.android.assistant.Phase
 import app.shilex.android.assistant.VoiceSession
 import app.shilex.android.data.Settings
+import app.shilex.android.local.LocalTurn
+import app.shilex.android.local.LocalPhase
 import app.shilex.android.ui.Orb
 import app.shilex.android.ui.ShilexTheme
 import kotlin.math.roundToInt
