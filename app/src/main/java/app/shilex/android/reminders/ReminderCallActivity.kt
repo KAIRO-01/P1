@@ -1,5 +1,8 @@
 package app.shilex.android.reminders
 
+import android.Manifest
+import android.app.KeyguardManager
+import android.content.pm.PackageManager
 import android.app.NotificationManager
 import android.content.Intent
 import android.media.AudioAttributes
@@ -39,6 +42,10 @@ import androidx.compose.ui.graphics.Color
 import androidx.compose.ui.text.style.TextAlign
 import androidx.compose.ui.unit.dp
 import app.shilex.android.Branding
+import app.shilex.android.assistant.Phase
+import app.shilex.android.assistant.VoiceSession
+import app.shilex.android.memory.ProjectMemory
+import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.shilex.android.ui.ShilexTheme
 import java.util.Locale
 
@@ -54,6 +61,8 @@ class ReminderCallActivity : ComponentActivity() {
     private var answered by mutableStateOf(false)
     private var status by mutableStateOf("Incoming reminder")
     private var tts: TextToSpeech? = null
+    private var usingAi by mutableStateOf(false)
+    private var sessionStartedHere = false
     private var ringtone: Ringtone? = null
     private val startRing = Runnable {
         if (answered || isFinishing || isDestroyed) return@Runnable
@@ -77,11 +86,18 @@ class ReminderCallActivity : ComponentActivity() {
             return
         }
         setContent {
+            val live by VoiceSession.get(applicationContext).state.collectAsStateWithLifecycle()
+            val label = if (usingAi) when (live.phase) {
+                Phase.Off -> live.problem ?: "AI disconnected. End call or try again."
+                Phase.Connecting -> "Connecting AI voice..."
+                Phase.Listening -> "Listening — ask your question"
+                Phase.Speaking -> "KAIRO is speaking..."
+            } else status
             ShilexTheme {
                 IncomingReminder(
                     text = reminderText,
                     answered = answered,
-                    status = status,
+                    status = label,
                     onAnswer = ::answer,
                     onDismiss = ::dismiss,
                 )
@@ -104,6 +120,9 @@ class ReminderCallActivity : ComponentActivity() {
         val newText = intent.getStringExtra(EXTRA_TEXT).orEmpty()
         if (newId != reminderId && newId != -1L) {
             stopRinging()
+            if (sessionStartedHere) VoiceSession.get(applicationContext).stop("next reminder")
+            sessionStartedHere = false
+            usingAi = false
             tts?.stop()
             tts?.shutdown()
             tts = null
@@ -116,12 +135,55 @@ class ReminderCallActivity : ComponentActivity() {
 
     private fun answer() {
         if (answered || reminderText.isBlank()) return
+        // Do not read business details or open a live microphone on a locked phone.
+        val lock = getSystemService(KeyguardManager::class.java)
+        if (lock.isKeyguardLocked) {
+            status = "Unlock your phone to answer privately."
+            lock.requestDismissKeyguard(this, object : KeyguardManager.KeyguardDismissCallback() {
+                override fun onDismissSucceeded() { runOnUiThread { answer() } }
+                override fun onDismissCancelled() { status = "Unlock cancelled. Tap Answer to retry." }
+                override fun onDismissError() { status = "Unlock phone, then tap Answer." }
+            })
+            return
+        }
         answered = true
         stopRinging()
-        status = "Preparing offline voice..."
         cancelNotification()
-        // TTS is created ONLY after Answer; background ringing never sends text or audio
-        // to Gemini or an external speech provider.
+
+        val session = VoiceSession.get(applicationContext)
+        val micAllowed = checkSelfPermission(Manifest.permission.RECORD_AUDIO) == PackageManager.PERMISSION_GRANTED
+        if (session.state.value.hasKey && micAllowed) {
+            usingAi = true
+            sessionStartedHere = !session.active
+            status = "Connecting AI voice..."
+            val memory = ProjectMemory(applicationContext)
+            val context = when {
+                reminderText.startsWith("Daily work review", ignoreCase = true) -> memory.review()
+                reminderText.contains("test reminder", ignoreCase = true) -> "This is a test call; no project is selected."
+                else -> {
+                    val match = memory.search(reminderText).firstOrNull {
+                        reminderText.contains(it.title, ignoreCase = true)
+                    }
+                    if (match == null) "No verified project selected. Use projects_search when asked about work."
+                    else "Approved project: " + match.title + ", worker " + match.worker +
+                        ", due " + match.due + ", status " + match.status + ", details " + match.details
+                }
+            }
+            session.start(
+                "I just ANSWERED a KAIRO reminder call. Reminder topic: " + reminderText +
+                    ". Verified local information: " + context +
+                    ". Begin by briefly telling me the reminder, then LISTEN to my questions " +
+                    "and keep a natural TWO-WAY conversation about this topic. " +
+                    "For work facts use projects_search or work_review. " +
+                    "Before changing any project memory ask for approval via project_propose. " +
+                    "Do not claim a task is finished unless I confirmed it."
+            )
+            return
+        }
+
+        // Offline fallback preserves the original Answer-to-speak functionality if
+        // the Gemini key, network or microphone is not available.
+        status = "Offline reminder (two-way AI needs Gemini key and microphone access)"
         tts = TextToSpeech(applicationContext) { result ->
             main.post {
                 if (isFinishing || isDestroyed) return@post
@@ -176,6 +238,9 @@ class ReminderCallActivity : ComponentActivity() {
     }
 
     private fun dismiss() {
+        if (sessionStartedHere) VoiceSession.get(applicationContext).stop("reminder call ended")
+        sessionStartedHere = false
+        usingAi = false
         stopRinging()
         cancelNotification()
         tts?.stop()
@@ -195,6 +260,10 @@ class ReminderCallActivity : ComponentActivity() {
     }
 
     override fun onDestroy() {
+        if (sessionStartedHere && !isChangingConfigurations) {
+            VoiceSession.get(applicationContext).stop("reminder activity closed")
+        }
+        sessionStartedHere = false
         stopRinging()
         tts?.stop()
         tts?.shutdown()
