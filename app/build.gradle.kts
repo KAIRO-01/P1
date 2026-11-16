@@ -24,7 +24,17 @@ android {
     // password (from the macOS Keychain) as environment variables. Without them the release
     // build is unsigned. Android installs an update only if it is signed with this same key.
     val releaseKeystore = System.getenv("SHILEX_KEYSTORE")
+    val previewKeystore = System.getenv("KAIRO_PREVIEW_KEYSTORE")?.takeIf { it.isNotBlank() }
+    val previewPassword = System.getenv("KAIRO_PREVIEW_PASSWORD")?.takeIf { it.isNotBlank() }
     signingConfigs {
+        if (previewKeystore != null && previewPassword != null) {
+            create("previewStable") {
+                storeFile = file(previewKeystore)
+                storePassword = previewPassword
+                keyAlias = System.getenv("KAIRO_PREVIEW_ALIAS")?.takeIf { it.isNotBlank() } ?: "kairo"
+                keyPassword = System.getenv("KAIRO_PREVIEW_KEY_PASSWORD")?.takeIf { it.isNotBlank() } ?: previewPassword
+            }
+        }
         if (releaseKeystore != null) {
             create("release") {
                 storeFile = file(releaseKeystore)
@@ -36,6 +46,13 @@ android {
     }
 
     buildTypes {
+        debug {
+            // Independent preview, avoids replacing an existing KAIRO signed by another key.
+            applicationIdSuffix = ".preview"
+            versionNameSuffix = "-preview"
+            if (previewKeystore != null && previewPassword != null)
+                signingConfig = signingConfigs.getByName("previewStable")
+        }
         release {
             isMinifyEnabled = true
             proguardFiles(getDefaultProguardFile("proguard-android-optimize.txt"), "proguard-rules.pro")

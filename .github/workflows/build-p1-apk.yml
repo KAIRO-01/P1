@@ -41,6 +41,23 @@ jobs:
         run: |
           sdkmanager --install "platforms;android-35" "build-tools;35.0.0" "ndk;27.0.12077973" "cmake;3.22.1"
           yes | sdkmanager --licenses >/dev/null || true
+      - name: Restore stable preview signing key when configured
+        env:
+          KEY_B64: ${{ secrets.KAIRO_PREVIEW_KEYSTORE_BASE64 }}
+          KEY_PASS: ${{ secrets.KAIRO_PREVIEW_PASSWORD }}
+          KEY_ALIAS: ${{ secrets.KAIRO_PREVIEW_ALIAS }}
+          KEY_ENTRY_PASS: ${{ secrets.KAIRO_PREVIEW_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          if [[ -n "$KEY_B64" && -n "$KEY_PASS" ]]; then
+            printf "%s" "$KEY_B64" | base64 -d > "$RUNNER_TEMP/kairo-preview.jks"
+            echo "KAIRO_PREVIEW_KEYSTORE=$RUNNER_TEMP/kairo-preview.jks" >> "$GITHUB_ENV"
+            echo "KAIRO_PREVIEW_PASSWORD=$KEY_PASS" >> "$GITHUB_ENV"
+            echo "KAIRO_PREVIEW_ALIAS=${KEY_ALIAS:-kairo}" >> "$GITHUB_ENV"
+            echo "KAIRO_PREVIEW_KEY_PASSWORD=${KEY_ENTRY_PASS:-$KEY_PASS}" >> "$GITHUB_ENV"
+          else
+            echo "::warning::Temporary debug signer. This preview will install beside KAIRO but future previews may not update in place."
+          fi
       - name: Test order parsing and core logic
         run: |
           chmod +x gradlew
@@ -64,4 +81,4 @@ jobs:
           TAG="p1-preview-${GITHUB_RUN_NUMBER}"
           gh release create "$TAG" "app/build/outputs/apk/debug/app-debug.apk#P1-KAIRO-preview.apk" \
             --target "$GITHUB_SHA" --title "P1 KAIRO APK Preview #${GITHUB_RUN_NUMBER}" --prerelease \
-            --notes "Independent P1 KAIRO Android preview. Tap to talk with Gemini API key. Spoken Stop handling is added, but listening over speaker still needs device testing. The trained Hey Kairo wake-word ONNX model is NOT included yet. WARNING: This build uses a fresh debug signing key. DO NOT uninstall or clear app storage if KAIRO has saved memory; update requires a matching signing key or a verified complete backup and restore plan."
+            --notes "KAIRO Preview installs separately (app.shilex.android.p1.preview), preserving original KAIRO data. Private Google Sheets need owner consent plus Android OAuth client setup for this exact package and signing certificate. Preview key is temporary unless GitHub secrets configure a stable signer. Never uninstall original KAIRO to install this preview. Real-phone GPS and voice verification still require testing."
