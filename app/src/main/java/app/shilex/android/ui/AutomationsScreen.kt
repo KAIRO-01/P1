@@ -23,6 +23,9 @@ import androidx.compose.material3.OutlinedButton
 import androidx.compose.material3.OutlinedTextField
 import app.shilex.android.reminders.DailyReview
 import app.shilex.android.memory.ProjectMemory
+import app.shilex.android.memory.WorkMemory
+import app.shilex.android.memory.WorkApproval
+import app.shilex.android.reminders.CallRetryManager
 import android.Manifest
 import android.content.Intent
 import android.content.pm.PackageManager
@@ -95,6 +98,7 @@ fun AutomationsScreen() {
         }
         Routines()
         DailyReviewSetup()
+        WorkerFiles()
         ProjectMemorySummary()
         ReminderPreview()
         Group("On this phone", "Works without internet and doesn't use your Gemini key.", Accent, "Local", LOCAL)
@@ -354,6 +358,117 @@ private fun ProjectMemorySummary() {
                 }
             }
             if (notice.isNotBlank()) Text(notice, style = MaterialTheme.typography.bodySmall)
+        }
+    }
+}
+
+
+/** A real, searchable master record per worker; one order can have many workers. */
+@Composable
+private fun WorkerFiles() {
+    val context = LocalContext.current
+    val store = remember(context) { WorkMemory(context) }
+    var workers by remember { mutableStateOf(store.workers()) }
+    var jobs by remember { mutableStateOf(store.tasks()) }
+    var pending by remember { mutableStateOf(WorkApproval.preview()) }
+    var message by remember { mutableStateOf("") }
+    var backupToRestore by remember { mutableStateOf<String?>(null) }
+
+    fun refresh() {
+        workers = store.workers()
+        jobs = store.tasks()
+        pending = WorkApproval.preview()
+    }
+
+    val export = rememberLauncherForActivityResult(
+        ActivityResultContracts.CreateDocument("application/json"),
+    ) { uri ->
+        if (uri != null) {
+            runCatching {
+                val output = context.contentResolver.openOutputStream(uri)
+                    ?: error("Could not open export file")
+                output.bufferedWriter().use { it.write(store.exportJson()) }
+            }.onSuccess { message = "Worker files exported. Keep this backup private." }
+                .onFailure { message = "Export failed: " + (it.message ?: "unknown error") }
+        }
+    }
+    val import = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
+        if (uri != null) {
+            runCatching {
+                val input = context.contentResolver.openInputStream(uri) ?: error("Cannot read backup")
+                val data = input.bufferedReader().use { it.readText() }
+                require(data.length <= 2_000_000)
+                val root = JSONObject(data)
+                require(root.optString("format") == "KAIRO_WORKERS_V1") { "Wrong backup format" }
+                data to root.getJSONArray("assignments").length()
+            }.onSuccess { (raw, count) ->
+                backupToRestore = raw
+                message = "Restore " + count + " saved worker tasks? Confirm below. Existing matching tasks may change."
+            }.onFailure { message = "Invalid backup: " + (it.message ?: "unknown error") }
+        }
+    }
+
+    LifecycleResumeEffect(Unit) {
+        refresh()
+        onPauseOrDispose {}
+    }
+    Section(null) {
+        Column(Modifier.padding(vertical = 12.dp), verticalArrangement = Arrangement.spacedBy(9.dp)) {
+            Row(Modifier.fillMaxWidth(), verticalAlignment = Alignment.CenterVertically) {
+                Text("Worker Master Files", style = MaterialTheme.typography.titleLarge, modifier = Modifier.weight(1f))
+                TextButton(onClick = { refresh() }) { Text("Refresh") }
+            }
+            Text("One permanent file per worker, with assignments linked to the customer's order. KAIRO proposes changes; you say YES once to save all.",
+                style = MaterialTheme.typography.bodySmall, color = Muted)
+            if (pending != null) {
+                Text("WAITING FOR CONFIRMATION: " + pending,
+                    style = MaterialTheme.typography.bodyMedium)
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = {
+                        message = WorkApproval.approveTap(context)
+                        refresh()
+                    }) { Text("Yes, save tasks") }
+                    OutlinedButton(onClick = {
+                        WorkApproval.discard()
+                        message = "Proposal rejected. Nothing saved."
+                        refresh()
+                    }) { Text("No, correct") }
+                }
+            }
+            if (workers.isEmpty()) {
+                Text("No worker tasks saved yet. Example: Anjali will take the order, Vijay will make the mandir, Mangat will polish it.",
+                    style = MaterialTheme.typography.bodySmall, color = Muted)
+            }
+            workers.take(40).forEach { worker ->
+                val assigned = jobs.filter { it.worker.equals(worker, true) }
+                InfoRow(worker + " (" + assigned.size + " tasks)",
+                    assigned.take(5).joinToString(" · ") {
+                        "#" + it.id + " " + it.work + " / " + it.order +
+                            if (it.due.isNotBlank()) " / due " + it.due else ""
+                    }.ifBlank { "No assignments" })
+            }
+            Text("Worker files have their own backup, separate from older Project Memory V2 notes.",
+                style = MaterialTheme.typography.bodySmall, color = Muted)
+            Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                Button(onClick = { export.launch("kairo-worker-files.json") }) { Text("Export worker files") }
+                OutlinedButton(onClick = { import.launch(arrayOf("application/json", "text/plain")) }) { Text("Import worker files") }
+            }
+            if (backupToRestore != null) {
+                Row(horizontalArrangement = Arrangement.spacedBy(8.dp)) {
+                    Button(onClick = {
+                        val raw = backupToRestore
+                        if (raw != null) {
+                            runCatching { store.importJson(raw) }
+                                .onSuccess { message = "Restored " + it + " worker tasks."; backupToRestore = null; refresh() }
+                                .onFailure { message = "Restore failed: " + (it.message ?: "unknown error") }
+                        }
+                    }) { Text("Confirm restore") }
+                    OutlinedButton(onClick = { backupToRestore = null; message = "Restore cancelled." }) {
+                        Text("Cancel")
+                    }
+                }
+            }
+            if (message.isNotBlank()) Text(message, style = MaterialTheme.typography.bodySmall)
         }
     }
 }
