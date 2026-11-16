@@ -299,12 +299,17 @@ fun SettingsScreen(assistant: AssistantViewModel) {
             val sheetScope = rememberCoroutineScope()
             var watchChanges by remember { mutableStateOf(sheetSettings.watchSheetChanges) }
             var googleConnected by remember { mutableStateOf(SheetsAuth.authorized(context)) }
+            var liveVerified by remember {
+                mutableStateOf(sheetLink.isNotBlank() && sheetSettings.verifiedSheetUrl == sheetLink.trim())
+            }
             val googleConsent = rememberLauncherForActivityResult(
                 ActivityResultContracts.StartIntentSenderForResult(),
             ) { response ->
                 if (response.resultCode == Activity.RESULT_OK) {
                     val ok = runCatching { SheetsAuth.complete(context, response.data) }.getOrDefault(false)
                     googleConnected = ok
+                    sheetSettings.verifiedSheetUrl = ""
+                    liveVerified = false
                     sheetStatus = if (ok) "Google Account connected read-only. Tap Test." else "Google did not grant Sheets access."
                 } else sheetStatus = "Google authorization cancelled."
             }
@@ -331,7 +336,12 @@ fun SettingsScreen(assistant: AssistantViewModel) {
                     sheetStatus = "Opening Google authorization..."
                     SheetsAuth.connect(context,
                         resolve = { googleConsent.launch(it) },
-                        connected = { googleConnected = true; sheetStatus = "Google Account connected. Tap Test." },
+                        connected = {
+                            googleConnected = true
+                            sheetSettings.verifiedSheetUrl = ""
+                            liveVerified = false
+                            sheetStatus = "Google Account connected. Tap Test."
+                        },
                         failed = { sheetStatus = it },
                     )
                 }) { Text(if (googleConnected) "Reconnect" else "Connect") }
@@ -341,6 +351,12 @@ fun SettingsScreen(assistant: AssistantViewModel) {
                     TextButton(onClick = {
                         SheetsAuth.disconnect(context) { success ->
                             googleConnected = SheetsAuth.authorized(context)
+                            if (success) {
+                                sheetSettings.verifiedSheetUrl = ""
+                                liveVerified = false
+                                SheetWatch.configure(context, false)
+                                watchChanges = false
+                            }
                             sheetStatus = if (success) "Google permission revoked." else "Could not revoke Google permission; try again."
                         }
                     }) { Text("Disconnect") }
@@ -348,7 +364,10 @@ fun SettingsScreen(assistant: AssistantViewModel) {
             }
             OutlinedTextField(
                 value = sheetLink,
-                onValueChange = { sheetLink = it },
+                onValueChange = {
+                    sheetLink = it
+                    liveVerified = it.isNotBlank() && sheetSettings.verifiedSheetUrl == it.trim()
+                },
                 label = { Text("Google Sheet link") },
                 placeholder = { Text("https://docs.google.com/spreadsheets/d/...") },
                 singleLine = true,
@@ -360,7 +379,7 @@ fun SettingsScreen(assistant: AssistantViewModel) {
                     "Works with a connected live Sheet; Google may request authorization again. An imported CSV cannot update itself. " +
                     "Allow Android notifications to receive alerts.",
                 watchChanges,
-                enabled = OrderSheet.parseLink(sheetLink) != null,
+                enabled = OrderSheet.parseLink(sheetLink) != null && liveVerified,
             ) { enable ->
                 sheetSettings.orderSheetUrl = sheetLink.trim()
                 if (SheetWatch.configure(context, enable)) {
@@ -370,17 +389,28 @@ fun SettingsScreen(assistant: AssistantViewModel) {
                     sheetStatus = "Android could not schedule Sheet monitoring."
                 }
             }
+            if (!liveVerified) InfoRow("Before enabling alerts", "Save the link, connect Google if private, and tap Test. Alerts require a successfully tested LIVE Sheet.")
             InfoRow("Last background check", SheetWatch.lastUpdate(context))
             InfoRow("Order data", sheetStatus) {
                 TextButton(onClick = {
                     if (sheetLink.isBlank()) {
                         sheetSettings.orderSheetUrl = ""
+                        sheetSettings.verifiedSheetUrl = ""
+                        liveVerified = false
+                        SheetWatch.configure(context, false)
+                        watchChanges = false
                         sheetStatus = if (OrderSheet.hasImport(context)) "Sheet link cleared; private CSV remains saved." else "Sheet link cleared."
                     } else if (OrderSheet.parseLink(sheetLink) == null) {
                         sheetStatus = "Invalid link. Copy the complete link from Google Sheets."
                     } else {
                         sheetSettings.orderSheetUrl = sheetLink.trim()
-                        sheetStatus = "Saved. Tap Test to check whether the Sheet is readable."
+                        if (sheetSettings.verifiedSheetUrl != sheetLink.trim()) {
+                            sheetSettings.verifiedSheetUrl = ""
+                            liveVerified = false
+                            SheetWatch.configure(context, false)
+                            watchChanges = false
+                        }
+                        sheetStatus = "Saved. Connect Google if private, then tap Test."
                     }
                 }) { Text("Save link") }
             }
@@ -395,8 +425,22 @@ fun SettingsScreen(assistant: AssistantViewModel) {
                             val snap = withContext(Dispatchers.IO) {
                                 OrderSheet.load(context, OkHttpClient())
                             }
+                            liveVerified = snap.live
+                            sheetSettings.verifiedSheetUrl = if (snap.live) sheetLink.trim() else ""
+                            if (!snap.live && watchChanges) {
+                                SheetWatch.configure(context, false)
+                                watchChanges = false
+                            }
                             "Connected: ${snap.orders.size} orders from ${snap.source}. Say 'KAIRO, which mandirs are due in four days?'"
-                        } catch (e: Exception) { "Cannot read source: ${e.message}" }
+                        } catch (e: Exception) {
+                            liveVerified = false
+                            sheetSettings.verifiedSheetUrl = ""
+                            if (watchChanges) {
+                                SheetWatch.configure(context, false)
+                                watchChanges = false
+                            }
+                            "Cannot read source: ${e.message}"
+                        }
                     }
                 }) { Text("Test") }
             }
