@@ -269,16 +269,19 @@ fun SettingsScreen(assistant: AssistantViewModel) {
 
         Section("Wake word") {
             if (assistant.wakeWordAvailable) {
+                var voiceReady by remember { mutableStateOf(assistant.voiceSaved) }
                 SwitchRow(
                     "Say \"${WakeWordModel.PHRASE}\"",
-                    "Heard on this phone only. Test model: not for release builds.",
+                    "Requires your five voice samples. Speaker filtering is approximate and is NOT 100% biometric security.",
                     wakeOn,
+                    enabled = voiceReady,
                 ) { assistant.setWakeWord(it) }
+                if (!voiceReady) InfoRow("Enroll your voice first", "Record five clear Hey Kairo samples before enabling hands-free wake.")
                 VoiceSetupRow(
-                    saved = assistant.voiceSaved,
+                    saved = voiceReady,
                     record = assistant::recordVoiceSample,
-                    onSave = assistant::saveVoice,
-                    onForget = assistant::forgetVoice,
+                    onSave = { samples -> assistant.saveVoice(samples); voiceReady = true },
+                    onForget = { assistant.forgetVoice(); voiceReady = false; assistant.setWakeWord(false) },
                 )
             } else {
                 InfoRow("Not in this build", "The wake word ships once ${Branding.ASSISTANT_NAME} has its own model.")

@@ -28,6 +28,8 @@ class WakeListener(private val context: Context, private val onWake: () -> Unit)
 
     /** Callers check RECORD_AUDIO first. Returns false if the model or mic isn't available. */
     fun start(): Boolean {
+        // Fail closed: un-enrolled voices must never trigger hands-free listening.
+        if (!VoiceProfile.exists(context)) { Diag.w("wake: enroll the owner's voice first"); return false }
         // Until a custom ONNX model is trained, use the bundled offline speech engine.
         if (!WakeWordModel.available(context)) return fallback.start()
         fallback.stop()

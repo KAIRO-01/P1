@@ -24,6 +24,7 @@ class VoskWakeListener(private val context: Context, private val onWake: () -> U
     private var thread: Thread? = null
 
     fun start(): Boolean {
+        if (!VoiceProfile.exists(context)) return false
         if (running) return true
         if (!OfflineSpeech.get(context).available()) return false
         running = true
@@ -58,7 +59,7 @@ class VoskWakeListener(private val context: Context, private val onWake: () -> U
                 val chunk = ShortArray(SAMPLE_RATE / 10)
                 // Keep only the last ~3 seconds for the speaker check; no recording is stored.
                 val recent = ArrayDeque<ShortArray>()
-                val profile = VoiceProfile.load(context)
+                val profile = VoiceProfile.load(context) ?: return
                 var consecutive = 0
                 try {
                     record.startRecording()
@@ -72,7 +73,7 @@ class VoskWakeListener(private val context: Context, private val onWake: () -> U
                         val text = extract(if (finished) recognizer.result else recognizer.partialResult)
                         consecutive = if (MATCH.containsMatchIn(text)) consecutive + 1 else 0
                         if ((finished && consecutive > 0) || consecutive >= 2) {
-                            if (profile != null && !matchesEnrolledVoice(profile, recent)) {
+                            if (!matchesEnrolledVoice(profile, recent)) {
                                 // Don't allow an unverified voice to trigger the assistant.
                                 Diag.i("wake: offline phrase rejected by voice profile")
                                 consecutive = 0

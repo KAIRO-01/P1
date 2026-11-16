@@ -143,6 +143,7 @@ class AssistantViewModel(app: Application) : AndroidViewModel(app) {
 
     /** Call while the screen is visible: turning it on starts the listening service. */
     fun setWakeWord(on: Boolean) {
+        if (on && !VoiceProfile.exists(getApplication())) return
         Settings(getApplication()).wakeWord = on
         VoiceService.start(getApplication())
     }
