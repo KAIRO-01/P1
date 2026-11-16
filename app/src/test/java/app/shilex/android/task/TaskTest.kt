@@ -1,6 +1,10 @@
 package app.shilex.android.task
 
 import app.shilex.android.control.ScreenElement
+import app.shilex.android.tools.SheetTools
+import app.shilex.android.tools.NavigationTools
+import app.shilex.android.tools.ProjectTools
+import app.shilex.android.tools.WorkTools
 import app.shilex.android.tools.AppTools
 import app.shilex.android.tools.BookingRequest
 import app.shilex.android.tools.BookingTools
@@ -30,8 +34,8 @@ class TaskTest {
     @Test
     fun everyToolIsInTheRegistry() {
         val tools = (
-            CommsTools.all() + ClockTools.all() + ReminderTools.all() + MediaTools.all() + InfoTools.all() +
-                ScreenTools.all() + AppTools.all() + BookingTools.all() + DeviceTools.all() + NotifyTools.all() + CalendarTools.all() + MailTools.all() + MemoryTools.all()
+            CommsTools.all() + ClockTools.all() + ReminderTools.all() + ProjectTools.all() + WorkTools.all() + MediaTools.all() + InfoTools.all() +
+                ScreenTools.all() + SheetTools.all() + NavigationTools.all() + AppTools.all() + BookingTools.all() + DeviceTools.all() + NotifyTools.all() + CalendarTools.all() + MailTools.all() + MemoryTools.all()
             ).map { it.name }
         assertEquals(tools.toSet(), Capabilities.tools)
         assertNull(Capabilities.of("pay_now"))
