@@ -1,7 +1,14 @@
 package app.shilex.android.ui
 
+import android.Manifest
+import android.app.NotificationManager
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
+import android.os.Build
+import androidx.activity.compose.rememberLauncherForActivityResult
+import androidx.activity.result.contract.ActivityResultContracts
+import androidx.core.content.ContextCompat
 import android.provider.Settings
 import androidx.compose.foundation.layout.Arrangement
 import androidx.compose.foundation.layout.Column
@@ -30,6 +37,7 @@ import app.shilex.android.data.Settings as AppSettings
 import app.shilex.android.memory.MemoryStore
 import app.shilex.android.notify.NotificationWatch
 import app.shilex.android.orb.FloatingOrb
+import app.shilex.android.reminders.Reminders
 import app.shilex.android.wake.WakeWordModel
 
 @Composable
@@ -122,6 +130,72 @@ fun SettingsScreen(assistant: AssistantViewModel) {
             ) {
                 TextButton(onClick = { open(Settings.ACTION_NOTIFICATION_LISTENER_SETTINGS) }) { Text(if (notifyOn) "Change" else "Turn on") }
             }
+        }
+
+        Section("Call-style reminders · free") {
+            val manager = context.getSystemService(NotificationManager::class.java)
+            var notificationsAllowed by remember {
+                mutableStateOf(
+                    Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                        ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+                        PackageManager.PERMISSION_GRANTED,
+                )
+            }
+            var callsAllowed by remember {
+                mutableStateOf(
+                    Build.VERSION.SDK_INT < 34 || manager.canUseFullScreenIntent(),
+                )
+            }
+            val requestNotifications = rememberLauncherForActivityResult(
+                ActivityResultContracts.RequestPermission(),
+            ) { notificationsAllowed = it }
+            LifecycleResumeEffect(Unit) {
+                notificationsAllowed = Build.VERSION.SDK_INT < Build.VERSION_CODES.TIRAMISU ||
+                    ContextCompat.checkSelfPermission(context, Manifest.permission.POST_NOTIFICATIONS) ==
+                    PackageManager.PERMISSION_GRANTED
+                callsAllowed = Build.VERSION.SDK_INT < 34 || manager.canUseFullScreenIntent()
+                onPauseOrDispose { }
+            }
+
+            InfoRow(
+                "Reminder ringtone and Answer / Dismiss",
+                "Call-style notification, then offline voice only after Answer. No paid API, login, " +
+                    "mobile network call or Gemini usage when the reminder rings.",
+            ) {
+                TextButton(onClick = {
+                    if (notificationsAllowed) {
+                        Reminders(context).testCall()
+                    } else if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.TIRAMISU) {
+                        requestNotifications.launch(Manifest.permission.POST_NOTIFICATIONS)
+                    }
+                }) { Text(if (notificationsAllowed) "Test call" else "Allow") }
+            }
+            if (Build.VERSION.SDK_INT >= 34) {
+                InfoRow(
+                    "Full-screen incoming call",
+                    if (callsAllowed) "Allowed. The call screen can open over the lock screen."
+                    else "Not allowed. The Answer / Dismiss notification still works; " +
+                        "Android may prevent automatic full-screen display.",
+                ) {
+                    TextButton(onClick = {
+                        val intent = Intent(Settings.ACTION_MANAGE_APP_USE_FULL_SCREEN_INTENT,
+                            Uri.parse("package:${context.packageName}"))
+                            .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                        runCatching { context.startActivity(intent) }.onFailure {
+                            context.startActivity(
+                                Intent(Settings.ACTION_APPLICATION_DETAILS_SETTINGS,
+                                    Uri.parse("package:${context.packageName}"))
+                                    .addFlags(Intent.FLAG_ACTIVITY_NEW_TASK),
+                            )
+                        }
+                    }) { Text(if (callsAllowed) "Review" else "Allow") }
+                }
+            }
+            InfoRow(
+                "Offline speech",
+                "Uses an offline voice already installed on your Android phone. " +
+                    "If one isn't installed, the reminder stays readable instead of using internet speech.",
+            )
         }
 
         Section("Wake word") {
