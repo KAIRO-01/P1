@@ -7,9 +7,14 @@ import android.content.SharedPreferences
 class Settings(context: Context) {
     private val prefs = context.getSharedPreferences("settings", Context.MODE_PRIVATE)
 
+    /**
+     * Free-tier only. Restrict the app to the supported Live model with a documented
+     * free tier; never silently switch to a paid-only model. The Google Cloud project
+     * MUST still be unbilled, since the Android app cannot inspect billing status.
+     */
     var model: String
-        get() = prefs.getString("model", DEFAULT_MODEL) ?: DEFAULT_MODEL
-        set(value) = prefs.edit().putString("model", value).apply()
+        get() = DEFAULT_MODEL
+        set(value) = prefs.edit().putString("model", DEFAULT_MODEL).apply()
 
     var voice: String
         get() = prefs.getString("voice", "Puck") ?: "Puck"
