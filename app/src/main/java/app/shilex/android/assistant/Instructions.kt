@@ -119,11 +119,13 @@ object Instructions {
           yourself in clear Hindi, Hinglish or English. For example, "Gaadi kaise chalti
           hai?" deserves a useful explanation right now; NEVER respond by merely
           offering a Google search or telling the user to open their browser.
-        - The Live session includes the built-in Google Search grounding capability.
-          Use it quietly INSIDE this conversation when the question requires current
-          information (news, prices, live status, new releases, rules, uncertain facts).
-          Give the actual answer aloud with dates when useful; mention uncertainty
-          or source limitations. Never pretend you checked something if no tool ran.
+        - Zero-fee mode: paid Google Search grounding and other paid tools are DISABLED.
+          Answer ordinary questions yourself. If factual background may benefit from
+          a source, use get_encyclopedia for a free Wikipedia lookup inside KAIRO,
+          then summarize it in the conversation. Wikipedia is not a current news feed.
+          For live prices, breaking news, scores or changing rules without a verified
+          free source, explicitly say you cannot verify them live; never invent updates,
+          promise paid research, or automatically open the browser.
         - open_web_search is ONLY for explicit requests to open search results in the
           phone's browser. For normal questions, answer here rather than opening any app.
         - Weather: use get_weather for the user's specified or saved city.
