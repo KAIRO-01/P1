@@ -25,7 +25,7 @@ class Reminders(private val context: Context) {
     fun all(): List<Reminder> = ReminderRules.decode(prefs.getString(KEY, null))
 
     fun add(text: String, at: LocalDateTime): Reminder {
-        val reminder = Reminder(System.currentTimeMillis(), text, at)
+        val reminder = Reminder(nextId(), text, at)
         save(all() + reminder)
         schedule(reminder)
         return reminder
@@ -35,7 +35,7 @@ class Reminders(private val context: Context) {
     fun testCall() = callNow("This is your KAIRO test reminder. You can ask follow-up questions after Answer.")
 
     fun callNow(text: String) {
-        val sample = Reminder(System.currentTimeMillis(), text.take(600), LocalDateTime.now())
+        val sample = Reminder(nextId(), text.take(600), LocalDateTime.now())
         save(all() + sample)
         fire(sample.id)
     }
@@ -60,9 +60,33 @@ class Reminders(private val context: Context) {
         }
     }
 
+    private fun nextId(): Long = synchronized(Reminders::class.java) {
+        val next = maxOf(System.currentTimeMillis(), prefs.getLong("last_id", 0L) + 1L)
+        prefs.edit().putLong("last_id", next).commit()
+        next
+    }
+
     internal fun fire(id: Long) {
         val reminder = all().firstOrNull { it.id == id } ?: return
         save(all().filterNot { it.id == id })
+        if (postCall(reminder)) CallRetryManager(context).start(id, reminder.text)
+    }
+
+    /** Called each minute after an unanswered call; Answer/Decline cancels its alarm. */
+    internal fun showRetry(id: Long, text: String) {
+        context.getSystemService(NotificationManager::class.java).cancel(id.toInt())
+        if (!postCall(Reminder(id, text, LocalDateTime.now()))) {
+            CallRetryManager(context).stop(id)
+        }
+    }
+
+    fun stopCalling(id: Long) {
+        CallRetryManager(context).stop(id)
+        context.getSystemService(NotificationManager::class.java).cancel(id.toInt())
+    }
+
+    private fun postCall(reminder: Reminder): Boolean {
+        val id = reminder.id
         val manager = context.getSystemService(NotificationManager::class.java)
         // A NEW channel is required: Android doesn't allow apps to change the sound or
         // importance of the existing "reminders" channel after the first creation.
@@ -111,15 +135,15 @@ class Reminders(private val context: Context) {
             .setContentIntent(showCall)
             .setFullScreenIntent(showCall, true)
             .addAction(0, "Answer", answer)
-            .addAction(0, "Dismiss", dismiss)
-            .setDeleteIntent(dismiss)
+            .addAction(0, "Decline", dismiss)
+            .setOngoing(true)
             .setAutoCancel(false)
             .build()
-        runCatching { manager.notify(id.toInt(), notification) }
-            .onFailure { Diag.w("reminder: call notification blocked") }
-        // Android 14+ may downgrade the full-screen intent to a heads-up alert.
-        // In that case the user can still tap Answer on the notification.
-        Diag.i("reminder: call alert posted")
+        val posted = runCatching { manager.notify(id.toInt(), notification) }.isSuccess
+        if (!posted) Diag.w("reminder: call notification blocked")
+        // Android 14+ may downgrade full-screen intents to heads-up notifications.
+        if (posted) Diag.i("reminder: call alert posted")
+        return posted
     }
 
     private fun save(list: List<Reminder>) = prefs.edit().putString(KEY, ReminderRules.encode(list)).apply()
@@ -143,7 +167,7 @@ class Reminders(private val context: Context) {
             if (intent.action != ACTION_DISMISS) return
             val id = intent.getLongExtra(EXTRA_ID, -1L)
             if (id != -1L) {
-                context.getSystemService(NotificationManager::class.java).cancel(id.toInt())
+                Reminders(context).stopCalling(id)
             }
         }
     }
@@ -159,6 +183,7 @@ class Reminders(private val context: Context) {
             if (intent.action == Intent.ACTION_BOOT_COMPLETED) {
                 Reminders(context).rescheduleAll()
                 DailyReview(context).scheduleNext()
+                CallRetryManager(context).restoreAfterBoot()
             }
         }
     }
