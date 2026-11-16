@@ -188,7 +188,10 @@ class VoiceSession private constructor(private val app: Application) : LiveClien
         _level.value = 0f
     }
 
-    private fun loudness(level: Int) = (level / LOUD_LEVEL).coerceIn(0f, 1f)
+    // Non-linear level mapping makes quiet speech visible while strong speech drives
+    // the orb to full-sized waves. Both mic and Gemini PCM use this same meter.
+    private fun loudness(level: Int): Float =
+        kotlin.math.sqrt((level.coerceAtLeast(0).toFloat() / LOUD_LEVEL).coerceIn(0f, 1f))
 
     /** Ends the session once the reply in progress has been spoken. */
     private fun endAfterReply() {
