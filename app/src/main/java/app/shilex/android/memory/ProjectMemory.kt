@@ -6,6 +6,7 @@ import android.database.sqlite.SQLiteDatabase
 import android.database.sqlite.SQLiteOpenHelper
 import app.shilex.android.notify.VoiceConsent
 import org.json.JSONObject
+import org.json.JSONArray
 import java.time.LocalDate
 
 /** Durable local project memory. Does not save unapproved AI suggestions. */
@@ -59,13 +60,64 @@ class ProjectMemory(context: Context) : SQLiteOpenHelper(context.applicationCont
         } finally { db.endTransaction() }
         return result
     }
-    fun history(title: String): List<String> {
+    fun history(title: String, limit: Int = 8): List<String> {
         val out = mutableListOf<String>()
-        readableDatabase.rawQuery("SELECT note FROM history WHERE project=? COLLATE NOCASE ORDER BY at DESC LIMIT 8", arrayOf(title)).use { c ->
+        readableDatabase.rawQuery("SELECT note FROM history WHERE project=? COLLATE NOCASE ORDER BY at DESC LIMIT " + limit.coerceIn(1, 2000), arrayOf(title)).use { c ->
             while (c.moveToNext()) out.add(c.getString(0))
         }
         return out
     }
+    /** User-initiated, human-readable backup. Contains private business data. */
+    fun exportJson(): String {
+        val records = JSONArray()
+        all().forEach { p ->
+            records.put(JSONObject()
+                .put("project", p.title).put("worker", p.worker).put("details", p.details)
+                .put("due", p.due).put("status", p.status)
+                .put("history", JSONArray(history(p.title, 2000))))
+        }
+        return JSONObject().put("format", "KAIRO_PROJECTS_V2")
+            .put("exportedAt", System.currentTimeMillis()).put("projects", records).toString(2)
+    }
+
+    /** Import is called only after an explicit on-screen user confirmation. */
+    @Synchronized fun importJson(content: String): Int {
+        require(content.length <= 2_000_000) { "Backup file exceeds 2 MB" }
+        val root = JSONObject(content)
+        require(root.optString("format") == "KAIRO_PROJECTS_V2") { "Not a KAIRO Project Memory backup" }
+        val list = root.getJSONArray("projects")
+        require(list.length() <= 3000) { "Too many projects in backup" }
+        val entries = (0 until list.length()).map { i ->
+            val p = list.getJSONObject(i)
+            require(p.optString("project").isNotBlank() && p.optString("project").length <= 120)
+            val due = p.optString("due")
+            if (due.isNotBlank()) require(runCatching { LocalDate.parse(due) }.isSuccess) { "Invalid due date" }
+            require(!MemoryRules.looksSecret(p.toString())) { "Backup contains prohibited credentials" }
+            require((p.optJSONArray("history")?.length() ?: 0) <= 2000) { "Too much history" }
+            p
+        }
+        entries.forEach { p ->
+            val title = p.getString("project")
+            val history = (p.optJSONArray("history") ?: JSONArray())
+            val old = (0 until history.length()).map { history.optString(it) }.filter { it.isNotBlank() }
+            val already = history(title, 2000).toSet()
+            val restore = JSONObject(p.toString()).put("note", "Restored from user-approved backup")
+            save(restore)
+            val db = writableDatabase
+            db.beginTransaction()
+            try {
+                old.asReversed().filterNot { it in already }.forEach { note ->
+                    val h = ContentValues().apply {
+                        put("project", title); put("note", note.take(1600)); put("at", System.currentTimeMillis())
+                    }
+                    db.insertOrThrow("history", null, h)
+                }
+                db.setTransactionSuccessful()
+            } finally { db.endTransaction() }
+        }
+        return entries.size
+    }
+
     fun review(): String {
         val today = LocalDate.now()
         val open = all().filter { it.status.lowercase() !in setOf("done", "completed", "finished") }
