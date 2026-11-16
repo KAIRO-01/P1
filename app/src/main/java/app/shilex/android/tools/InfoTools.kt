@@ -15,7 +15,7 @@ import java.time.format.DateTimeFormatter
 
 /** Date and time, weather, and opening a web search. */
 object InfoTools {
-    fun all(): List<PhoneTool> = listOf(DateTime, GetWeather, OpenWebSearch)
+    fun all(): List<PhoneTool> = listOf(DateTime, GetWeather, GetEncyclopedia, OpenWebSearch)
 
     private object DateTime : PhoneTool {
         override val name = "get_current_datetime"
@@ -46,6 +46,61 @@ object InfoTools {
                 Results.done(line)
             } catch (_: IOException) {
                 Results.failed("weather_failed", "The weather service didn't answer.")
+            }
+        }
+    }
+
+    /**
+     * Public Wikipedia lookup: no paid search API, billing key or browser handoff.
+     * Encyclopedia summaries are not a source of breaking news or live prices.
+     */
+    private object GetEncyclopedia : PhoneTool {
+        override val name = "get_encyclopedia"
+
+        override fun declaration() = Schema.function(
+            name,
+            "Read a short Wikipedia encyclopedia overview within KAIRO, without a paid search API or browser. " +
+                "Good for named topics and background facts, not live prices, news or financial advice.",
+            Schema.string("query", "The topic or search terms.", required = true),
+        )
+
+        override suspend fun run(args: JSONObject, host: ToolHost): JSONObject {
+            val query = args.text("query").trim().take(140)
+            if (query.isEmpty()) return Results.failed("no_query", "Ask which topic to look up.")
+            return try {
+                val result = withContext(Dispatchers.IO) {
+                    val url = "https://en.wikipedia.org/w/api.php".toHttpUrl().newBuilder()
+                        .addQueryParameter("action", "query")
+                        .addQueryParameter("generator", "search")
+                        .addQueryParameter("gsrsearch", query)
+                        .addQueryParameter("gsrlimit", "1")
+                        .addQueryParameter("prop", "extracts")
+                        .addQueryParameter("exintro", "1")
+                        .addQueryParameter("explaintext", "1")
+                        .addQueryParameter("format", "json")
+                        .build()
+                    val request = Request.Builder().url(url)
+                        .header("User-Agent", "KAIROAndroidAssistant/0.1 (personal noncommercial Android app)")
+                        .build()
+                    host.http.newCall(request).execute().use { response ->
+                        if (!response.isSuccessful) throw IOException("Wikipedia HTTP ${response.code}")
+                        val pages = JSONObject(response.body?.string().orEmpty())
+                            .optJSONObject("query")?.optJSONObject("pages")
+                        val id = pages?.keys()?.asSequence()?.firstOrNull()
+                        val page = id?.let { pages.optJSONObject(it) }
+                        val summary = page?.optString("extract").orEmpty().trim()
+                            .replace(Regex("\\s+"), " ")
+                            .take(1_600)
+                        val title = page?.optString("title").orEmpty()
+                        if (summary.isEmpty() || title.isEmpty()) null
+                        else "Wikipedia, $title: $summary Source: https://en.wikipedia.org/wiki/${Uri.encode(title.replace(' ', '_'))}"
+                    }
+                } ?: return Results.failed("not_found", "Wikipedia doesn't have a clear result for that topic.")
+                Results.done(result)
+            } catch (_: IOException) {
+                Results.failed("wiki_unavailable", "The free encyclopedia service is unavailable right now.")
+            } catch (_: Exception) {
+                Results.failed("wiki_unavailable", "Couldn't look up that topic right now.")
             }
         }
     }
