@@ -11,6 +11,7 @@ data class Seen(
     val category: String = "",
     /** Short id for answering through the notification (Replies), when it has a Reply box. */
     val replyId: Int? = null,
+    val notificationKey: String = "",
 )
 
 /**
@@ -40,6 +41,7 @@ object Triage {
         """\b(offer|sale|% ?off|cashback|discount|deal|coupon|free delivery|subscribe|newsletter|limited time|unsubscribe)\b""",
         RegexOption.IGNORE_CASE,
     )
+    private val SOCIAL_ACTIVITY = Regex("""\b(liked|likes|started following|followed you|tagged you|new reel|posted a story|commented on your)\b""", RegexOption.IGNORE_CASE)
     private val PHONE_NUMBER = Regex("""^[+\d][\d\s()-]{6,}$""")
     private val IGNORED_CATEGORIES = setOf("transport", "progress", "service", "sys", "status", "navigation")
     private val IGNORED_PACKAGES = setOf("android", "com.android.systemui")
@@ -47,7 +49,7 @@ object Triage {
     fun sort(all: List<Seen>, ownPackage: String): List<Item> = all
         .filter { it.packageName != ownPackage && it.packageName !in IGNORED_PACKAGES && it.category !in IGNORED_CATEGORIES }
         .filter { it.title.isNotBlank() || it.text.isNotBlank() }
-        .distinctBy { Triple(it.packageName, it.title, it.text) }
+        .distinctBy { it.notificationKey.ifBlank { it.packageName + "|" + it.title + "|" + it.text } }
         .map(::classify)
 
     fun classify(n: Seen): Item {
@@ -56,6 +58,11 @@ object Triage {
         return when {
             CODE.containsMatchIn(body) && DIGITS.containsMatchIn(body) -> Item(Kind.Code, "A verification code from ${n.app} (digits hidden).")
             LINK.containsMatchIn(n.text) && unknownSender(n) -> Item(Kind.Suspicious, "${who} (${n.app}, not a saved contact) sent a link.")
+            // Instagram DMs may appear as group conversations. If actual message text
+            // is visible, prioritize it rather than counting it as a quiet group.
+            n.packageName == "com.instagram.android" && n.text.isNotBlank() &&
+                !PROMO.containsMatchIn(body) && !SOCIAL_ACTIVITY.containsMatchIn(body) ->
+                Item(Kind.Needs, "$who (${n.app}): ${short(n.text)}" + (n.replyId?.let { " [reply $it]" } ?: ""))
             n.group || n.category == "promo" || PROMO.containsMatchIn(body) -> Item(Kind.Quiet, n.app)
             n.packageName in MAIL_APPS || n.category == "email" ->
                 if (NO_REPLY.containsMatchIn(n.title)) Item(Kind.Quiet, n.app) else Item(Kind.Mail, "$who: ${short(n.text)}")
