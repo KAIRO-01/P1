@@ -47,6 +47,7 @@ import app.shilex.android.Branding
 import app.shilex.android.assistant.Phase
 import app.shilex.android.assistant.VoiceSession
 import app.shilex.android.memory.ProjectMemory
+import app.shilex.android.memory.WorkMemory
 import androidx.lifecycle.compose.collectAsStateWithLifecycle
 import app.shilex.android.ui.ShilexTheme
 import java.util.Locale
@@ -187,7 +188,8 @@ class ReminderCallActivity : ComponentActivity() {
             status = "Connecting AI voice..."
             val memory = ProjectMemory(applicationContext)
             val context = when {
-                reminderText.startsWith("Daily work review", ignoreCase = true) -> memory.review()
+                reminderText.startsWith("Daily work review", ignoreCase = true) ->
+                    WorkMemory(applicationContext).summary() + ". Older projects: " + memory.review()
                 reminderText.contains("test reminder", ignoreCase = true) -> "This is a test call; no project is selected."
                 else -> {
                     val match = memory.search(reminderText).firstOrNull {
