@@ -85,7 +85,7 @@ class WorkMemory(private val context: Context) :
         val list = proposal.getJSONArray("assignments")
         require(list.length() in 1..20) { "1 to 20 assignments required" }
         val before = tasks()
-        val byKey = before.associateBy { (it.order + "|" + it.work).lowercase() }.toMutableMap()
+        val byKey = before.associateBy { (it.order + "|" + it.worker + "|" + it.work).lowercase() }.toMutableMap()
         val db = writableDatabase
         val changed = mutableListOf<Pair<Long, Task?>>()
         db.beginTransaction()
@@ -99,7 +99,7 @@ class WorkMemory(private val context: Context) :
                 val taskId = job.optLong("task_id", 0L)
                 val old = if (taskId > 0) before.firstOrNull { it.id == taskId }
                     ?: error("Task " + taskId + " not found")
-                    else byKey[(proposedOrder.ifBlank { "General work" } + "|" + work).lowercase()]
+                    else byKey[(proposedOrder.ifBlank { "General work" } + "|" + worker + "|" + work).lowercase()]
                 // Editing an existing job must preserve its original customer/order link.
                 val order = proposedOrder.ifBlank { old?.order ?: "General work" }
                 val due = job.optString("due").trim().ifBlank { old?.due.orEmpty() }
@@ -124,7 +124,7 @@ class WorkMemory(private val context: Context) :
                     put("description", (worker + " / " + order + " / " + work + " / " + due + " / " + status + " / " + note).take(1400))
                     put("at", System.currentTimeMillis())
                 })
-                byKey[(order + "|" + work).lowercase()] = Task(id, worker, order, work, due, status, note, old?.reminderId ?: 0L)
+                byKey[(order + "|" + worker + "|" + work).lowercase()] = Task(id, worker, order, work, due, status, note, old?.reminderId ?: 0L)
                 changed += id to old
             }
             db.setTransactionSuccessful()
