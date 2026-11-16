@@ -9,6 +9,7 @@ import java.time.LocalDate
 import java.time.LocalDateTime
 import java.time.LocalTime
 import org.json.JSONObject
+import org.json.JSONArray
 
 /** Permanent worker files, with each worker's tasks linked to their customer order. */
 class WorkMemory(private val context: Context) :
@@ -72,6 +73,7 @@ class WorkMemory(private val context: Context) :
         val list = proposal.getJSONArray("assignments")
         require(list.length() in 1..20) { "1 to 20 assignments required" }
         val before = tasks()
+        val byKey = before.associateBy { (it.order + "|" + it.work).lowercase() }.toMutableMap()
         val db = writableDatabase
         val changed = mutableListOf<Pair<Long, Task?>>()
         db.beginTransaction()
@@ -85,7 +87,7 @@ class WorkMemory(private val context: Context) :
                 val taskId = job.optLong("task_id", 0L)
                 val old = if (taskId > 0) before.firstOrNull { it.id == taskId }
                     ?: error("Task " + taskId + " not found")
-                    else before.firstOrNull { it.order.equals(order, true) && it.work.equals(work, true) }
+                    else byKey[(order + "|" + work).lowercase()]
                 val due = job.optString("due").trim().ifBlank { old?.due.orEmpty() }
                 if (due.isNotBlank()) LocalDate.parse(due)
                 val status = job.optString("status").trim().take(40).ifBlank { old?.status ?: "Pending" }
@@ -108,6 +110,7 @@ class WorkMemory(private val context: Context) :
                     put("description", (worker + " / " + order + " / " + work + " / " + due + " / " + status + " / " + note).take(1400))
                     put("at", System.currentTimeMillis())
                 })
+                byKey[(order + "|" + work).lowercase()] = Task(id, worker, order, work, due, status, note, old?.reminderId ?: 0L)
                 changed += id to old
             }
             db.setTransactionSuccessful()
@@ -130,6 +133,42 @@ class WorkMemory(private val context: Context) :
             db.execSQL("UPDATE assignments SET reminder_id=? WHERE id=?", arrayOf(next?.id ?: 0L, id))
         }
         return changed.size.toString() + " worker assignments saved/updated. " + summary()
+    }
+
+    /** Portable private backup of worker files, independent of legacy project notes. */
+    fun exportJson(): String {
+        val array = JSONArray()
+        tasks().forEach { t ->
+            array.put(JSONObject()
+                .put("worker", t.worker).put("order", t.order).put("task", t.work)
+                .put("due", t.due).put("status", t.status).put("note", t.note))
+        }
+        return JSONObject().put("format", "KAIRO_WORKERS_V1")
+            .put("savedAt", System.currentTimeMillis()).put("assignments", array).toString(2)
+    }
+    /** Only call after explicit approval in the app; validates before any writes. */
+    fun importJson(raw: String): Int {
+        require(raw.length <= 2_000_000) { "Backup exceeds 2 MB" }
+        val root = JSONObject(raw)
+        require(root.optString("format") == "KAIRO_WORKERS_V1") { "Not a worker backup" }
+        val items = root.getJSONArray("assignments")
+        require(items.length() <= 3000) { "Too many entries" }
+        val entries = (0 until items.length()).map { i ->
+            val record = items.getJSONObject(i)
+            require(record.optString("worker").isNotBlank() && record.optString("task").isNotBlank())
+            require(record.optString("worker").length <= 80 && record.optString("task").length <= 280)
+            val due = record.optString("due")
+            if (due.isNotBlank()) LocalDate.parse(due)
+            require(!MemoryRules.looksSecret(record.toString())) { "Unsafe secret in backup" }
+            JSONObject().put("worker", record.optString("worker"))
+                .put("task", record.optString("task")).put("order", record.optString("order"))
+                .put("due", due).put("status", record.optString("status"))
+                .put("note", record.optString("note"))
+        }
+        entries.chunked(20).forEach { batch ->
+            commit(JSONObject().put("assignments", JSONArray(batch)))
+        }
+        return entries.size
     }
 
     companion object {
