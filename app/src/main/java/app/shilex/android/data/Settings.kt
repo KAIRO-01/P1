@@ -16,6 +16,11 @@ class Settings(context: Context) {
         get() = DEFAULT_MODEL
         set(value) = prefs.edit().putString("model", DEFAULT_MODEL).apply()
 
+    /** Opt-in: Google Search grounding may use billable Gemini API quota. */
+    var liveWebSearch: Boolean
+        get() = prefs.getBoolean("live_web_search", false)
+        set(value) = prefs.edit().putBoolean("live_web_search", value).apply()
+
     var voice: String
         get() = prefs.getString("voice", "Puck") ?: "Puck"
         set(value) = prefs.edit().putString("voice", value).apply()
