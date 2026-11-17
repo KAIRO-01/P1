@@ -2,6 +2,7 @@ package app.shilex.android.sheets
 
 import android.content.Context
 import android.content.Intent
+import android.content.pm.PackageManager
 import android.net.Uri
 import androidx.activity.result.IntentSenderRequest
 import app.shilex.android.data.Settings
@@ -10,8 +11,10 @@ import com.google.android.gms.auth.api.identity.AuthorizationResult
 import com.google.android.gms.auth.api.identity.Identity
 import com.google.android.gms.auth.api.identity.RevokeAccessRequest
 import com.google.android.gms.common.api.Scope
+import com.google.android.gms.common.api.ApiException
 import com.google.android.gms.tasks.Tasks
 import java.io.ByteArrayOutputStream
+import java.security.MessageDigest
 import java.util.concurrent.TimeUnit
 import okhttp3.OkHttpClient
 import okhttp3.Request
@@ -36,19 +39,53 @@ object SheetsAuth {
                 } else if (valid(result)) {
                     Settings(context).sheetOAuthConnected = true
                     connected()
-                } else failed("Google did not grant read-only Sheets access.")
+                } else failed("Google did not grant the read-only Sheets scope. Check Google Account and OAuth settings.")
             }
-            .addOnFailureListener {
-                failed("Google authorization failed. Check Google Play services and Android OAuth client configuration.")
+            .addOnFailureListener { error ->
+                failed(explain(error))
             }
     }
 
-    fun complete(context: Context, intent: Intent?): Boolean {
-        if (intent == null) return false
-        val result = Identity.getAuthorizationClient(context).getAuthorizationResultFromIntent(intent)
-        if (!valid(result)) return false
+    /**
+     * Preserve Google's actual authorization failure for display, rather than silently
+     * collapsing every failure (including a developer configuration error) into false.
+     */
+    fun complete(context: Context, intent: Intent?): Result<Unit> = runCatching {
+        val data = intent ?: error("Google returned no authorization data.")
+        val result = Identity.getAuthorizationClient(context).getAuthorizationResultFromIntent(data)
+        if (!valid(result)) error("Google did not grant read-only Sheets access.")
         Settings(context).sheetOAuthConnected = true
-        return true
+    }
+
+    /** Package and current APK certificate for the matching Google Cloud Android OAuth client. */
+    @Suppress("DEPRECATION")
+    fun clientDetails(context: Context): String = runCatching {
+        val info = context.packageManager.getPackageInfo(
+            context.packageName, PackageManager.GET_SIGNING_CERTIFICATES,
+        )
+        val signature = info.signingInfo?.apkContentsSigners?.firstOrNull()
+            ?: error("Signing certificate unavailable")
+        val sha1 = MessageDigest.getInstance("SHA-1").digest(signature.toByteArray())
+            .joinToString(":") { "%02X".format(it) }
+        "Package: ${context.packageName}. Signing SHA-1: $sha1. " +
+            "Create a matching Android OAuth client in Google Cloud, enable the Google Sheets API, " +
+            "and authorize the Google Account that can open the spreadsheet."
+    }.getOrElse { "Package: ${context.packageName}. Could not read signing SHA-1 (${it.javaClass.simpleName})." }
+
+    /** Never log or expose tokens; show the error status and the required configuration. */
+    fun explain(error: Throwable?): String {
+        val apiError = error as? ApiException ?: error?.cause as? ApiException
+        return when (apiError?.statusCode) {
+            10 -> "Google authorization error 10 (DEVELOPER_ERROR). The APK package name and signing SHA-1 " +
+                "must match an Android OAuth client in Google Cloud. Tap OAuth setup details below."
+            12501, 16 -> "Google account selection did not complete (status ${apiError.statusCode}). " +
+                "Select an account that has access to the Sheet and try again."
+            null -> "Google authorization could not finish: " +
+                (error?.localizedMessage?.take(170) ?: "No result was returned.") +
+                " Check OAuth setup details."
+            else -> "Google authorization failed (status ${apiError.statusCode}). " +
+                "Check Google Play services, the Google Cloud OAuth client and Sheets API."
+        }
     }
 
     fun disconnect(context: Context, complete: (Boolean) -> Unit) {
