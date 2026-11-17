@@ -35,9 +35,9 @@ class OrderSheetTest {
     }
 
     @Test fun parsesActualMonthlyNameNoteContactAndBookingDate() {
-        val csv = "Shop orders,2026\\nZ,NOTE,Name,contact,Column 5,Making by,Book DT\\n" +
-            ",CORIAN,NAYAN RANE,9769736490,,,09/11/2026\\n" +
-            ",teakwood/corian,VISHAL LAUNDIYA,9833645529,,,11/11/2026\\n"
+        val csv = "Shop orders,2026\nZ,NOTE,Name,contact,Column 5,Making by,Book DT\n" +
+            ",CORIAN,NAYAN RANE,9769736490,,,09/11/2026\n" +
+            ",teakwood/corian,VISHAL LAUNDIYA,9833645529,,,11/11/2026\n"
         val orders = OrderSheet.decode(csv.toByteArray(), "jan")
         assertEquals(2, orders.size)
         assertEquals("jan", orders[0].tab)
