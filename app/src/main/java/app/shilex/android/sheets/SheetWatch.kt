@@ -38,6 +38,7 @@ object SheetWatch {
     private const val SUMMARY = "latest_change"
     private const val CHANGED_AT = "changed_at"
     private const val CHECKED_AT = "checked_at"
+    private const val FORMAT_VERSION = "fingerprint_version"
 
     fun configure(context: Context, enabled: Boolean): Boolean {
         val scheduler = context.getSystemService(JobScheduler::class.java)
@@ -58,7 +59,8 @@ object SheetWatch {
     fun record(context: Context, orders: List<OrderSheet.Order>): Int {
         val prefs = context.getSharedPreferences(PREFS, Context.MODE_PRIVATE)
         val latest = fingerprints(orders)
-        val oldJson = prefs.getString(SNAPSHOT, null)
+        // Switching from one tab to all months must not generate false change alerts.
+        val oldJson = if (prefs.getInt(FORMAT_VERSION, 0) == 2) prefs.getString(SNAPSHOT, null) else null
         val previous = runCatching { oldJson?.let(::JSONObject) }.getOrNull()
         val updates = if (previous == null) emptyList() else buildList {
             latest.forEach { (key, value) -> if (!previous.has(key) || previous.optString(key) != value) add(key.substringBefore("#")) }
@@ -71,7 +73,7 @@ object SheetWatch {
         val now = System.currentTimeMillis()
         val next = JSONObject()
         latest.forEach { (key, value) -> next.put(key, value) }
-        val edit = prefs.edit().putString(SNAPSHOT, next.toString()).putLong(CHECKED_AT, now)
+        val edit = prefs.edit().putInt(FORMAT_VERSION, 2).putString(SNAPSHOT, next.toString()).putLong(CHECKED_AT, now)
         if (updates.isNotEmpty()) {
             val names = updates.distinct().take(6).joinToString("; ")
             edit.putString(SUMMARY, "${updates.size} order records changed: $names.")
@@ -96,7 +98,7 @@ object SheetWatch {
         val result = linkedMapOf<String, String>()
         val counts = mutableMapOf<String, Int>()
         orders.forEach { row ->
-            val base = (row.customer.ifBlank { "Unnamed customer" } + ": " +
+            val base = (row.tab.ifBlank { "CSV" } + " / " + row.customer.ifBlank { "Unnamed customer" } + ": " +
                 row.mandir.ifBlank { "Mandir" }).take(120)
             val n = counts.getOrDefault(base, 0) + 1
             counts[base] = n
