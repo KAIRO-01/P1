@@ -4,6 +4,8 @@ import android.Manifest
 import android.app.NotificationManager
 import android.app.Activity
 import android.content.Intent
+import android.content.ClipData
+import android.content.ClipboardManager
 import android.content.pm.PackageManager
 import android.net.Uri
 import android.location.LocationManager
@@ -23,6 +25,7 @@ import androidx.compose.foundation.layout.padding
 import androidx.compose.foundation.rememberScrollState
 import androidx.compose.foundation.verticalScroll
 import androidx.compose.material3.OutlinedTextField
+import androidx.compose.material3.AlertDialog
 import androidx.compose.material3.MaterialTheme
 import androidx.compose.material3.Text
 import androidx.compose.material3.TextButton
@@ -372,12 +375,31 @@ fun SettingsScreen(assistant: AssistantViewModel) {
                     }) { Text("Disconnect") }
                 }
             }
+            var oauthDialog by remember { mutableStateOf<String?>(null) }
+            if (oauthDialog != null) {
+                AlertDialog(
+                    onDismissRequest = { oauthDialog = null },
+                    title = { Text("Google Sheets OAuth setup") },
+                    text = { Text(oauthDialog.orEmpty()) },
+                    confirmButton = {
+                        TextButton(onClick = {
+                            val details = oauthDialog.orEmpty()
+                            context.getSystemService(ClipboardManager::class.java)
+                                .setPrimaryClip(ClipData.newPlainText("KAIRO OAuth details", details))
+                            sheetStatus = "OAuth setup details copied. Use the package name and signing SHA-1 in Google Cloud."
+                            oauthDialog = null
+                        }) { Text("Copy details") }
+                    },
+                    dismissButton = {
+                        TextButton(onClick = { oauthDialog = null }) { Text("Close") }
+                    },
+                )
+            }
             InfoRow(
                 "OAuth setup details",
-                "If account selection stalls or closes, review this APK's exact package name and signing SHA-1. " +
-                    "Google Cloud requires an Android OAuth client matching both. Preview signatures may change between builds.",
+                "Show this APK's exact package name and signing SHA-1. Google Cloud's Android OAuth client must match both.",
             ) {
-                TextButton(onClick = { sheetStatus = SheetsAuth.clientDetails(context) }) { Text("Show") }
+                TextButton(onClick = { oauthDialog = SheetsAuth.clientDetails(context) }) { Text("Show") }
             }
             OutlinedTextField(
                 value = sheetLink,
