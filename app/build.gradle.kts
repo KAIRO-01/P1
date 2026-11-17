@@ -47,8 +47,8 @@ android {
 
     buildTypes {
         debug {
-            // Independent preview, avoids replacing an existing KAIRO signed by another key.
-            applicationIdSuffix = ".preview"
+            // Independent Sheets diagnostics preview; do not replace existing KAIRO or prior preview with a different signing key.
+            applicationIdSuffix = ".preview.sheets"
             versionNameSuffix = "-preview"
             if (previewKeystore != null && previewPassword != null)
                 signingConfig = signingConfigs.getByName("previewStable")
