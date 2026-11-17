@@ -305,13 +305,23 @@ fun SettingsScreen(assistant: AssistantViewModel) {
             val googleConsent = rememberLauncherForActivityResult(
                 ActivityResultContracts.StartIntentSenderForResult(),
             ) { response ->
-                if (response.resultCode == Activity.RESULT_OK) {
-                    val ok = runCatching { SheetsAuth.complete(context, response.data) }.getOrDefault(false)
-                    googleConnected = ok
-                    sheetSettings.verifiedSheetUrl = ""
-                    liveVerified = false
-                    sheetStatus = if (ok) "Google Account connected read-only. Tap Test." else "Google did not grant Sheets access."
-                } else sheetStatus = "Google authorization cancelled."
+                // Google may return an ApiException in the data Intent even when the
+                // Activity result is CANCELED: parse it instead of losing the error.
+                val result = if (response.data != null || response.resultCode == Activity.RESULT_OK) {
+                    SheetsAuth.complete(context, response.data)
+                } else {
+                    Result.failure(IllegalStateException(
+                        "Google account chooser closed without permission. If you selected an account, " +
+                            "check the Android OAuth package and SHA-1 in OAuth setup details.",
+                    ))
+                }
+                googleConnected = SheetsAuth.authorized(context)
+                sheetSettings.verifiedSheetUrl = ""
+                liveVerified = false
+                sheetStatus = result.fold(
+                    onSuccess = { "Google Account authorized for read-only Sheets. Tap Test to check your actual spreadsheet." },
+                    onFailure = { SheetsAuth.explain(it) },
+                )
             }
             val csvPicker = rememberLauncherForActivityResult(ActivityResultContracts.OpenDocument()) { uri ->
                 if (uri != null) sheetScope.launch {
@@ -361,6 +371,13 @@ fun SettingsScreen(assistant: AssistantViewModel) {
                         }
                     }) { Text("Disconnect") }
                 }
+            }
+            InfoRow(
+                "OAuth setup details",
+                "If account selection stalls or closes, review this APK's exact package name and signing SHA-1. " +
+                    "Google Cloud requires an Android OAuth client matching both. Preview signatures may change between builds.",
+            ) {
+                TextButton(onClick = { sheetStatus = SheetsAuth.clientDetails(context) }) { Text("Show") }
             }
             OutlinedTextField(
                 value = sheetLink,
