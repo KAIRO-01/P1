@@ -75,13 +75,16 @@ object OrderSheet {
                 if (text.startsWith("<!DOCTYPE", ignoreCase = true) || text.startsWith("<html", ignoreCase = true)) {
                     error("Google requires sign-in to read this Sheet.")
                 }
-                return Snapshot(decode(bytes), "live Google Sheet", true)
+                val orders = decode(bytes)
+                if (orders.isEmpty()) error("The Sheet contains no recognized orders. Check the first-row headings.")
+                return Snapshot(orders, "live Google Sheet", true)
             } catch (error: Exception) {
                 reason = error.message.orEmpty()
                 if (!hasImport(context)) {
                     throw IllegalStateException(
-                        "This link cannot be read without Google authorization (${reason.take(100)}). " +
-                            "Your private Sheet has NOT been made public. Import its CSV export in KAIRO Settings for read-only questions.",
+                        "Google Sheet link could not be read (${reason.take(100)}). " +
+                            "For a private Sheet, tap Connect Google Account in KAIRO Settings > Google Sheets, then Test. " +
+                            "If sign-in is unavailable, import a CSV without making your customer data public.",
                     )
                 }
             }
