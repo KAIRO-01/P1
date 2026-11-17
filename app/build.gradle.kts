@@ -47,8 +47,8 @@ android {
 
     buildTypes {
         debug {
-            // Independent Sheets diagnostics preview; do not replace existing KAIRO or prior preview with a different signing key.
-            applicationIdSuffix = ".preview.sheets"
+            // Independent OAuth setup dialog preview; do not replace existing KAIRO or prior preview with a different signing key.
+            applicationIdSuffix = ".preview.oauthdialog"
             versionNameSuffix = "-preview"
             if (previewKeystore != null && previewPassword != null)
                 signingConfig = signingConfigs.getByName("previewStable")
