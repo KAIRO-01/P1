@@ -24,6 +24,7 @@ object SheetTools {
             Schema.string("action", "find, due, overdue, balance, list, or changes", required = true,
                 choices = listOf("find", "due", "overdue", "balance", "list", "changes")),
             Schema.string("customer", "Customer name for find; part of name is fine."),
+            Schema.string("month", "Optional month/tab to filter, e.g. jan, February, March; omit for ALL months."),
             Schema.integer("days", "For due: upcoming number of days (default 4, max 90)."),
         )
 
@@ -34,7 +35,13 @@ object SheetTools {
             } catch (e: Exception) {
                 return Results.failed("sheet_unavailable", e.message ?: "Could not read your Google Sheet.")
             }
-            val orders = snapshot.orders
+            val month = args.text("month").trim().lowercase(Locale.ROOT)
+            val orders = if (month.isBlank() || month == "all") snapshot.orders else snapshot.orders.filter {
+                it.tab.lowercase(Locale.ROOT).contains(month.take(3))
+            }
+            if (orders.isEmpty() && month.isNotBlank() && month != "all") {
+                return Results.done("No order records found for $month. Available tabs: " + snapshot.tabs.joinToString(", "))
+            }
             val today = LocalDate.now()
             val name = args.text("customer")
             val action = args.text("action")
@@ -52,7 +59,7 @@ object SheetTools {
                         .sortedBy { it.first }
                     if (upcoming.isEmpty()) "No undelivered orders with a readable delivery date within the next $days days. Check the date column and status."
                     else "${upcoming.size} order(s) due within $days days:\n" +
-                        upcoming.take(12).joinToString("\n") { (date, order) -> "${order.customer.ifBlank { "Unnamed customer" }}: ${order.mandir.ifBlank { "Mandir" }}, $date. ${balance(order)}" }
+                        upcoming.take(12).joinToString("\n") { (date, order) -> "${order.customer.ifBlank { "Unnamed customer" }} (${order.tab}): ${order.mandir.ifBlank { "Mandir" }}, $date. ${balance(order)}" }
                 }
                 "overdue" -> {
                     val late = orders.mapNotNull { order -> OrderSheet.deliveryDate(order.delivery)?.let { it to order } }
@@ -71,8 +78,10 @@ object SheetTools {
                             "${order.customer.ifBlank { "Unnamed customer" }} ${rupees(amount)}"
                         } + ". Orders with missing or nonnumeric amounts are excluded."
                 }
-                "list" -> "${orders.size} order(s) in the source. Recent entries:\n" +
-                    orders.takeLast(8).joinToString("\n") { detail(it) }
+                "list" -> "${orders.size} order(s) across " +
+                    orders.groupingBy { it.tab.ifBlank { "imported CSV" } }.eachCount()
+                        .entries.joinToString("; ") { (tab, count) -> "$tab: $count" } +
+                    ". Recent entries:\n" + orders.takeLast(8).joinToString("\n") { detail(it) }
                 else -> return Results.failed("invalid_action", "Use find, due, overdue, balance, or list.")
             }
             return Results.done("Source: ${snapshot.source} (${orders.size} order records). $result")
@@ -80,10 +89,11 @@ object SheetTools {
     }
 
     private fun detail(o: OrderSheet.Order): String =
-        "Customer: ${o.customer.ifBlank { "not entered" }}; Mandir: ${o.mandir.ifBlank { "not entered" }}; " +
+        (if (o.tab.isBlank()) "" else "Month/tab: ${o.tab}; ") + "Customer: ${o.customer.ifBlank { "not entered" }}; Mandir: ${o.mandir.ifBlank { "not entered" }}; " +
             "Price: ${o.price.ifBlank { "not entered" }}; Advance: ${o.advance.ifBlank { "not entered" }}; " +
             "${balance(o)}; Delivery: ${o.delivery.ifBlank { "not entered" }}; " +
-            "Address: ${o.address.ifBlank { "not entered" }}; Status: ${o.status.ifBlank { "not entered" }}."
+            "Address: ${o.address.ifBlank { "not entered" }}; Status: ${o.status.ifBlank { "not entered" }}; " +
+            "Booked on: ${o.bookingDate.ifBlank { "not entered" }}; Contact: ${o.contact.ifBlank { "not entered" }}."
 
     private fun balance(o: OrderSheet.Order): String = when {
         o.balance.isNotBlank() -> "Balance: ${o.balance}"
