@@ -106,37 +106,58 @@ object SheetsAuth {
         return result.accessToken ?: error("Google returned no access token.")
     }
 
+    /**
+     * Read every monthly tab in the spreadsheet, not only the gid in the link.
+     * Values.batchGet groups up to eight tabs per request to limit latency.
+     * All requests stay read-only under the user's authorized Google Account.
+     */
     fun read(context: Context, http: OkHttpClient, ref: OrderSheet.SheetRef): OrderSheet.Snapshot {
         val bearer = token(context)
         val base = "https://sheets.googleapis.com/v4/spreadsheets/" + ref.id
-        val meta = get(http, base + "?fields=sheets(properties(sheetId,title))", bearer)
-        val tabs = meta.optJSONArray("sheets") ?: error("No accessible spreadsheet tabs.")
-        if (tabs.length() == 0) error("No spreadsheet tabs.")
-        var chosen: JSONObject? = null
-        for (i in 0 until tabs.length()) {
-            val properties = tabs.getJSONObject(i).getJSONObject("properties")
-            if (properties.optString("sheetId") == ref.gid) { chosen = properties; break }
-        }
-        if (chosen == null && ref.gid != "0") error("The tab ID in your link was not found.")
-        val title = (chosen ?: tabs.getJSONObject(0).getJSONObject("properties")).getString("title")
-        val range = "'" + title.replace("'", "''") + "'!A1:AZ15001"
-        val values = get(http, base + "/values/" + Uri.encode(range), bearer).optJSONArray("values")
-            ?: error("The selected tab has no rows.")
-        val csv = buildString {
-            for (i in 0 until values.length()) {
-                val row = values.getJSONArray(i)
-                for (j in 0 until row.length()) {
-                    if (j > 0) append(',')
-                    append('"')
-                    append(row.optString(j).replace("\"", "\"\""))
-                    append('"')
-                }
-                append('\n')
+        val meta = get(http, base + "?fields=sheets(properties(sheetId,title,hidden))", bearer)
+        val sheets = meta.optJSONArray("sheets") ?: error("No accessible spreadsheet tabs.")
+        val visible = buildList {
+            for (i in 0 until sheets.length()) {
+                val props = sheets.getJSONObject(i).getJSONObject("properties")
+                if (!props.optBoolean("hidden", false)) add(props.getString("title"))
             }
         }
-        val orders = OrderSheet.decode(csv.toByteArray(Charsets.UTF_8))
-        if (orders.isEmpty()) error("No orders recognized. Check column headings in the first row.")
-        return OrderSheet.Snapshot(orders, "private Google Sheet (read-only, tab: " + title + ")", true)
+        if (visible.isEmpty()) error("The spreadsheet has no visible tabs.")
+        val titles = OrderSheet.selectOrderTabs(visible)
+        if (titles.size > 36) error("Too many tabs for this preview (" + titles.size + "; maximum 36).")
+        val orders = ArrayList<OrderSheet.Order>()
+        for (group in titles.chunked(8)) {
+            val ranges = group.map { title ->
+                "'" + title.replace("'", "''") + "'!A1:AZ15001"
+            }
+            val query = ranges.joinToString("") { "&ranges=" + Uri.encode(it) }
+            val result = get(http, base + "/values:batchGet?valueRenderOption=FORMATTED_VALUE" + query, bearer)
+            val rangeResults = result.optJSONArray("valueRanges") ?: error("Google returned no tab data.")
+            if (rangeResults.length() != group.size) error("Google did not return all requested tabs.")
+            for (i in group.indices) {
+                val rows = rangeResults.getJSONObject(i).optJSONArray("values") ?: continue
+                val csv = buildString {
+                    for (j in 0 until rows.length()) {
+                        val row = rows.getJSONArray(j)
+                        for (k in 0 until row.length()) {
+                            if (k > 0) append(',')
+                            append('"')
+                            append(row.optString(k).replace("\\\"", "\\\"\\\""))
+                            append('"')
+                        }
+                        append('\\n')
+                    }
+                }
+                orders += OrderSheet.decode(csv.toByteArray(Charsets.UTF_8), sourceTab = group[i])
+            }
+        }
+        if (orders.isEmpty()) error("No customer orders recognized across " + titles.size + " tabs. Check Name headings.")
+        return OrderSheet.Snapshot(
+            orders,
+            "private Google Sheet (read-only; " + titles.size + " tabs: " + titles.joinToString(", ") + ")",
+            true,
+            tabs = titles,
+        )
     }
 
     private fun get(http: OkHttpClient, url: String, bearer: String): JSONObject {
