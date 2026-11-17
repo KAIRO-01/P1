@@ -47,6 +47,11 @@ object Instructions {
         Google Sheets orders:
         - sheet_orders reads the Google Sheet link configured by the owner in Settings; use it for
           customer mandir orders, prices, advance, balance, delivery date and delivery address.
+        - The linked spreadsheet may contain JAN, FEB, March, APRIL and other monthly tabs.
+          sheet_orders searches ALL month tabs by default, not just the link's selected gid.
+          If the user asks for one month, set sheet_orders(month="March" etc.).
+          Clearly identify which tab an order came from. Never mistake Book DT (booking date)
+          for delivery due date; missing delivery dates must remain unknown.
         - "Which mandirs are due in 4 days?" -> sheet_orders(action="due", days=4).
           "What is Amit's mandir order?" -> sheet_orders(action="find", customer="Amit").
           "How much balance is pending?" -> sheet_orders(action="balance").
