@@ -340,7 +340,7 @@ fun SettingsScreen(assistant: AssistantViewModel) {
                 }
             }
             Text(
-                "Paste a Google Sheet link. For private Sheets, tap Connect Google Account to authorize READ-ONLY access. " +
+                "Paste any tab link from your Google spreadsheet. KAIRO reads ALL month tabs (Jan, Feb, March, etc.) with READ-ONLY Google access. " +
                     "Do not make customer data public. Google Sheets API and Android OAuth client configuration may be required.",
                 style = MaterialTheme.typography.bodySmall,
             )
@@ -453,7 +453,7 @@ fun SettingsScreen(assistant: AssistantViewModel) {
                     }
                 }) { Text("Save link") }
             }
-            InfoRow("Test connection", "Check the linked Sheet or the saved private CSV.") {
+            InfoRow("Test connection", "Read all monthly tabs from your connected Sheet (or the saved CSV).") {
                 TextButton(onClick = {
                     if (sheetLink.isNotBlank() && OrderSheet.parseLink(sheetLink) != null) {
                         sheetSettings.orderSheetUrl = sheetLink.trim()
@@ -470,7 +470,8 @@ fun SettingsScreen(assistant: AssistantViewModel) {
                                 SheetWatch.configure(context, false)
                                 watchChanges = false
                             }
-                            "Connected: ${snap.orders.size} orders from ${snap.source}. Say 'KAIRO, which mandirs are due in four days?'"
+                            "Connected: ${snap.orders.size} orders across ${snap.tabs.size} tabs from ${snap.source}. " +
+                                "Say 'KAIRO, show orders from all months' or 'show March orders'."
                         } catch (e: Exception) {
                             liveVerified = false
                             sheetSettings.verifiedSheetUrl = ""
