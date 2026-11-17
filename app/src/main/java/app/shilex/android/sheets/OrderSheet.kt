@@ -31,8 +31,11 @@ object OrderSheet {
         val delivery: String,
         val address: String,
         val status: String,
+        val tab: String = "",
+        val bookingDate: String = "",
+        val contact: String = "",
     )
-    data class Snapshot(val orders: List<Order>, val source: String, val live: Boolean)
+    data class Snapshot(val orders: List<Order>, val source: String, val live: Boolean, val tabs: List<String> = emptyList())
 
     fun parseLink(link: String): SheetRef? {
         val uri = runCatching { URI(link.trim()) }.getOrNull() ?: return null
@@ -109,28 +112,51 @@ object OrderSheet {
         return output.toByteArray()
     }
 
-    fun decode(bytes: ByteArray): List<Order> {
+    /**
+     * The pasted URL identifies the spreadsheet. With private OAuth, load every visible
+     * month tab (jan, feb, March, etc.) instead of the URL's currently selected gid.
+     * Non-month dashboards are ignored when month tabs exist.
+     */
+    private val monthTab = Regex(
+        "(?i)(^|[^a-z])(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|jun(?:e)?|jul(?:y)?|aug(?:ust)?|sep(?:t|tember)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)(?=$|[^a-z])"
+    )
+
+    fun selectOrderTabs(visibleTabs: List<String>): List<String> {
+        val months = visibleTabs.filter { monthTab.containsMatchIn(it.trim()) }
+        return if (months.isNotEmpty()) months else visibleTabs
+    }
+
+    fun decode(bytes: ByteArray, sourceTab: String = ""): List<Order> {
         val rows = parseCsv(String(bytes, Charsets.UTF_8).removePrefix("\uFEFF"))
             .filter { row -> row.any(String::isNotBlank) }
         if (rows.isEmpty()) return emptyList()
-        val headers = rows.first().map(::key)
+        // Some monthly sheets have a title or blank lines before the header.
+        val nameHeaders = setOf("name", "customername", "clientname", "customer", "client", "partyname")
+        val headerAt = rows.take(12).indexOfFirst { row -> row.map(::key).any { it in nameHeaders } }
+        if (headerAt < 0) return emptyList()
+        val headers = rows[headerAt].map(::key)
         fun at(row: List<String>, vararg names: String): String {
             val options = names.map(::key)
             val exact = headers.indexOfFirst { it in options }
-            val idx = if (exact >= 0) exact else headers.indexOfFirst { h -> options.any { h.contains(it) } }
-            return row.getOrNull(idx)?.trim().orEmpty().take(500)
+            val index = if (exact >= 0) exact else headers.indexOfFirst { h ->
+                options.any { it.length >= 4 && h.contains(it) }
+            }
+            return row.getOrNull(index)?.trim().orEmpty().take(500)
         }
-        return rows.drop(1).take(15_000).mapNotNull { row ->
+        return rows.drop(headerAt + 1).take(15_000).mapNotNull { row ->
             val customer = at(row, "Customer Name", "Client Name", "Customer", "Client", "Party Name", "Name")
-            val mandir = at(row, "Mandir Type", "Mandir Design", "Mandir", "Temple Type", "Product", "Item", "Order Details")
-            val delivery = at(row, "Delivery Date", "Dispatch Date", "Due Date", "Expected Delivery", "Delivery")
+            // In the owner's month tabs, NOTE contains the material/design description.
+            val mandir = at(row, "Mandir Type", "Mandir Design", "Mandir", "Temple Type", "Product", "Item", "Order Details", "NOTE", "Material")
+            val delivery = at(row, "Delivery Date", "Dispatch Date", "Due Date", "Expected Delivery", "Delivery", "Delivery DT")
+            val booked = at(row, "Book DT", "Booking Date", "Book Date", "Order Date", "Booked On")
             val status = at(row, "Order Status", "Work Status", "Delivery Status", "Status")
             val price = at(row, "Total Amount", "Total Price", "Order Value", "Order Amount", "Selling Price", "Price", "Amount")
             val advance = at(row, "Advance Received", "Advance Payment", "Advance Paid", "Advance")
             val balance = at(row, "Balance Amount", "Balance Due", "Pending Amount", "Balance", "Due Payment")
             val address = at(row, "Delivery Address", "Delivery Location", "Site Address", "Customer Address", "Address", "Location")
-            if (listOf(customer, mandir, delivery, price, status).all(String::isEmpty)) null
-            else Order(customer, mandir, price, advance, balance, delivery, address, status)
+            val contact = at(row, "Contact", "Mobile Number", "Mobile", "Phone Number", "Phone", "Contact No")
+            if (listOf(customer, delivery, price, advance, booked).all(String::isEmpty)) null
+            else Order(customer, mandir, price, advance, balance, delivery, address, status, sourceTab, booked, contact)
         }
     }
 
