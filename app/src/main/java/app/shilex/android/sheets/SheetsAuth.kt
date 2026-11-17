@@ -142,10 +142,10 @@ object SheetsAuth {
                         for (k in 0 until row.length()) {
                             if (k > 0) append(',')
                             append('"')
-                            append(row.optString(k).replace("\\\"", "\\\"\\\""))
+                            append(row.optString(k).replace("\"", "\"\""))
                             append('"')
                         }
-                        append('\\n')
+                        append('\n')
                     }
                 }
                 orders += OrderSheet.decode(csv.toByteArray(Charsets.UTF_8), sourceTab = group[i])
